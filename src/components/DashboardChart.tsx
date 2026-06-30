@@ -46,12 +46,12 @@ export const DashboardChart: React.FC<DashboardChartProps> = ({ data }) => {
           }}
         >
           <defs>
-            <linearGradient id="purpleGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#5C3EA3" stopOpacity={0.95}/>
-              <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0.6}/>
+            <linearGradient id="blueGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#0284C7" stopOpacity={0.95}/>
+              <stop offset="95%" stopColor="#38BDF8" stopOpacity={0.6}/>
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F0F5" />
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
           <XAxis 
             dataKey="month" 
             axisLine={false}
@@ -64,10 +64,10 @@ export const DashboardChart: React.FC<DashboardChartProps> = ({ data }) => {
             tickLine={false}
             tick={{ fill: '#94A3B8', fontSize: 11, fontWeight: 500 }}
           />
-          <Tooltip content={<CustomTooltip />} cursor={{ fill: '#F3EFFF', opacity: 0.4 }} />
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: '#E0F2FE', opacity: 0.4 }} />
           <Bar 
             dataKey="Falls" 
-            fill="url(#purpleGradient)" 
+            fill="url(#blueGradient)" 
             radius={[6, 6, 0, 0]} 
             maxBarSize={48}
           />

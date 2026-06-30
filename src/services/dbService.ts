@@ -10,6 +10,138 @@ const generateUUID = (): string => {
   return 'local-' + Math.random().toString(36).substring(2, 15) + '-' + Date.now().toString(36);
 };
 
+// Migrate legacy un-scoped offline keys to "local-default" namespace
+const migrateLegacyLocalKeys = () => {
+  const legacyKeys = [
+    'colors',
+    'rates',
+    'entries',
+    'income_periods',
+  ];
+  legacyKeys.forEach((key) => {
+    const oldValue = localStorage.getItem(`falltrack_${key}`);
+    if (oldValue !== null) {
+      const newKey = `falltrack_${key}_local-default`;
+      if (localStorage.getItem(newKey) === null) {
+        localStorage.setItem(newKey, oldValue);
+      }
+      localStorage.removeItem(`falltrack_${key}`);
+    }
+  });
+};
+migrateLegacyLocalKeys();
+
+export const migrateLocalDefaultToUser = (newUserId: string) => {
+  const keys = [
+    'colors',
+    'rates',
+    'entries',
+    'income_periods',
+  ];
+  keys.forEach((key) => {
+    const defaultVal = localStorage.getItem(`falltrack_${key}_local-default`);
+    if (defaultVal !== null) {
+      const userKey = `falltrack_${key}_${newUserId}`;
+      if (localStorage.getItem(userKey) === null) {
+        localStorage.setItem(userKey, defaultVal);
+      }
+    }
+  });
+};
+
+export const syncLocalDataToCloud = async (userId: string) => {
+  if (!isSupabaseConfigured || !supabase) return;
+
+  try {
+    // 1. Load local data to sync
+    const localColorsStr = localStorage.getItem(`falltrack_colors_local-default`) || localStorage.getItem(`falltrack_colors_${userId}`);
+    const localRatesStr = localStorage.getItem(`falltrack_rates_local-default`) || localStorage.getItem(`falltrack_rates_${userId}`);
+    const localEntriesStr = localStorage.getItem(`falltrack_entries_local-default`) || localStorage.getItem(`falltrack_entries_${userId}`);
+    const localPeriodsStr = localStorage.getItem(`falltrack_income_periods_local-default`) || localStorage.getItem(`falltrack_income_periods_${userId}`);
+
+    const colors: Color[] = localColorsStr ? JSON.parse(localColorsStr) : [];
+    const rates: Rate[] = localRatesStr ? JSON.parse(localRatesStr) : [];
+    const entries: ProductionEntry[] = localEntriesStr ? JSON.parse(localEntriesStr) : [];
+    const periods: IncomePeriod[] = localPeriodsStr ? JSON.parse(localPeriodsStr) : [];
+
+    if (colors.length === 0 && rates.length === 0 && entries.length === 0 && periods.length === 0) {
+      return;
+    }
+
+    const syncFlag = localStorage.getItem(`falltrack_synced_to_cloud_${userId}`);
+    if (syncFlag === 'true') return;
+
+    // 2. Sync Colors (Skip seeding standard ones, insert custom ones)
+    if (colors.length > 0) {
+      // Exclude predefined default colors which have null user_id and exist globally
+      const customColors = colors.filter(c => !c.id.startsWith('default-'));
+      if (customColors.length > 0) {
+        const formattedColors = customColors.map(c => ({
+          id: c.id,
+          name: c.name,
+          user_id: userId,
+          created_at: c.created_at
+        }));
+        const { error: colorErr } = await supabase.from('colors').upsert(formattedColors);
+        if (colorErr) console.warn('Color sync warning:', colorErr);
+      }
+    }
+
+    // 3. Sync Rates
+    if (rates.length > 0) {
+      const formattedRates = rates.map(r => ({
+        id: r.id,
+        rate_per_dozen: r.rate_per_dozen,
+        effective_from: r.effective_from,
+        user_id: userId,
+        created_at: r.created_at
+      }));
+      const { error: rateErr } = await supabase.from('rates').upsert(formattedRates);
+      if (rateErr) console.warn('Rate sync warning:', rateErr);
+    }
+
+    // 4. Sync Production Entries
+    if (entries.length > 0) {
+      const formattedEntries = entries.map(e => ({
+        id: e.id,
+        entry_date: e.entry_date,
+        color_id: e.color_id,
+        quantity: e.quantity,
+        user_id: userId,
+        created_at: e.created_at
+      }));
+      const { error: entryErr } = await supabase.from('production_entries').upsert(formattedEntries);
+      if (entryErr) console.warn('Entry sync warning:', entryErr);
+    }
+
+    // 5. Sync Income Periods
+    if (periods.length > 0) {
+      const formattedPeriods = periods.map(p => ({
+        id: p.id,
+        period_name: p.period_name,
+        start_date: p.start_date,
+        end_date: p.end_date,
+        total_falls: p.total_falls,
+        total_income: p.total_income,
+        user_id: userId,
+        created_at: p.created_at
+      }));
+      const { error: periodErr } = await supabase.from('income_periods').upsert(formattedPeriods);
+      if (periodErr) console.warn('Period sync warning:', periodErr);
+    }
+
+    localStorage.setItem(`falltrack_synced_to_cloud_${userId}`, 'true');
+    console.log('Successfully synced local offline data to Supabase!');
+  } catch (err) {
+    console.error('Error syncing local data to Supabase:', err);
+  }
+};
+
+// Helper to get active user ID
+export const getActiveUserId = (): string => {
+  return localStorage.getItem('falltrack_active_user_id') || 'local-default';
+};
+
 // Initial local seeds
 const SEED_COLORS = [
   'राणी', 'लाल', 'पांढरा', 'केशरी', 'निळा', 'हिरवा',
@@ -17,44 +149,68 @@ const SEED_COLORS = [
 ];
 
 const getLocalColors = (): Color[] => {
-  const data = localStorage.getItem('falltrack_colors');
+  const userId = getActiveUserId();
+  const data = localStorage.getItem(`falltrack_colors_${userId}`);
   if (!data) {
     const initial: Color[] = SEED_COLORS.map(name => ({
       id: generateUUID(),
       name,
       created_at: new Date().toISOString()
     }));
-    localStorage.setItem('falltrack_colors', JSON.stringify(initial));
+    localStorage.setItem(`falltrack_colors_${userId}`, JSON.stringify(initial));
     return initial;
   }
   return JSON.parse(data);
 };
 
 const getLocalRates = (): Rate[] => {
-  const data = localStorage.getItem('falltrack_rates');
+  const userId = getActiveUserId();
+  const data = localStorage.getItem(`falltrack_rates_${userId}`);
   if (!data) {
     const initial: Rate[] = [
       {
         id: 'default-rate-uuid',
         rate_per_dozen: 5.0,
-        effective_from: '2026-01-01',
+        effective_from: new Date().toISOString().split('T')[0],
         created_at: new Date().toISOString()
       }
     ];
-    localStorage.setItem('falltrack_rates', JSON.stringify(initial));
+    localStorage.setItem(`falltrack_rates_${userId}`, JSON.stringify(initial));
     return initial;
   }
   return JSON.parse(data);
 };
 
 const getLocalEntries = (): ProductionEntry[] => {
-  const data = localStorage.getItem('falltrack_entries');
+  const userId = getActiveUserId();
+  const data = localStorage.getItem(`falltrack_entries_${userId}`);
   return data ? JSON.parse(data) : [];
 };
 
 const getLocalIncomePeriods = (): IncomePeriod[] => {
-  const data = localStorage.getItem('falltrack_income_periods');
+  const userId = getActiveUserId();
+  const data = localStorage.getItem(`falltrack_income_periods_${userId}`);
   return data ? JSON.parse(data) : [];
+};
+
+const saveLocalColors = (colors: Color[]): void => {
+  const userId = getActiveUserId();
+  localStorage.setItem(`falltrack_colors_${userId}`, JSON.stringify(colors));
+};
+
+const saveLocalRates = (rates: Rate[]): void => {
+  const userId = getActiveUserId();
+  localStorage.setItem(`falltrack_rates_${userId}`, JSON.stringify(rates));
+};
+
+const saveLocalEntries = (entries: ProductionEntry[]): void => {
+  const userId = getActiveUserId();
+  localStorage.setItem(`falltrack_entries_${userId}`, JSON.stringify(entries));
+};
+
+const saveLocalIncomePeriods = (periods: IncomePeriod[]): void => {
+  const userId = getActiveUserId();
+  localStorage.setItem(`falltrack_income_periods_${userId}`, JSON.stringify(periods));
 };
 
 export const dbService = {
@@ -68,6 +224,25 @@ export const dbService = {
         .select('*')
         .order('name', { ascending: true });
       if (error) throw error;
+
+      // Self-healing: if color list is empty, seed default colors for the user
+      if (!data || data.length === 0) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const initialColors = SEED_COLORS.map(name => ({
+            name,
+            user_id: user.id
+          }));
+          const { data: seeded, error: seedErr } = await supabase
+            .from('colors')
+            .insert(initialColors)
+            .select()
+            .order('name', { ascending: true });
+          if (!seedErr && seeded) {
+            return seeded;
+          }
+        }
+      }
       return data || [];
     } else {
       return getLocalColors().sort((a, b) => a.name.localeCompare(b.name));
@@ -104,7 +279,7 @@ export const dbService = {
         created_at: new Date().toISOString()
       };
       colors.push(newColor);
-      localStorage.setItem('falltrack_colors', JSON.stringify(colors));
+      saveLocalColors(colors);
       return newColor;
     }
   },
@@ -126,7 +301,7 @@ export const dbService = {
       if (idx === -1) throw new Error('Color not found');
       
       colors[idx].name = trimmedName;
-      localStorage.setItem('falltrack_colors', JSON.stringify(colors));
+      saveLocalColors(colors);
 
       // Update cached color details in production entries
       const entries = getLocalEntries();
@@ -138,7 +313,7 @@ export const dbService = {
         }
       });
       if (changed) {
-        localStorage.setItem('falltrack_entries', JSON.stringify(entries));
+        saveLocalEntries(entries);
       }
       return colors[idx];
     }
@@ -170,7 +345,7 @@ export const dbService = {
 
       const colors = getLocalColors();
       const filtered = colors.filter(c => c.id !== id);
-      localStorage.setItem('falltrack_colors', JSON.stringify(filtered));
+      saveLocalColors(filtered);
     }
   },
 
@@ -179,18 +354,33 @@ export const dbService = {
   // ==========================================
   async getRates(): Promise<Rate[]> {
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('rates')
         .select('*')
         .order('effective_from', { ascending: false });
       if (error) throw error;
+
+      if (!data || data.length === 0) {
+        // Seed default rate for new user
+        const defaultRate = {
+          rate_per_dozen: 5.0,
+          effective_from: new Date().toISOString().split('T')[0]
+        };
+        const { data: inserted, error: insertErr } = await supabase
+          .from('rates')
+          .insert([defaultRate])
+          .select();
+        if (insertErr) throw insertErr;
+        data = inserted || [];
+      }
+
       return (data || []).map(r => ({
         ...r,
         rate_per_dozen: Number(r.rate_per_dozen)
       }));
     } else {
       return getLocalRates().sort(
-        (a, b) => new Date(b.effective_from).getTime() - new Date(a.effective_from).getTime()
+        (a, b) => b.effective_from.localeCompare(a.effective_from)
       );
     }
   },
@@ -219,7 +409,7 @@ export const dbService = {
         created_at: new Date().toISOString()
       };
       rates.push(newRate);
-      localStorage.setItem('falltrack_rates', JSON.stringify(rates));
+      saveLocalRates(rates);
       return newRate;
     }
   },
@@ -263,7 +453,8 @@ export const dbService = {
         // Month format: 'YYYY-MM'
         const [year, month] = filters.month.split('-');
         const start = `${year}-${month}-01`;
-        const end = new Date(Number(year), Number(month), 0).toISOString().split('T')[0];
+        const endObj = new Date(Number(year), Number(month), 0);
+        const end = `${endObj.getFullYear()}-${String(endObj.getMonth() + 1).padStart(2, '0')}-${String(endObj.getDate()).padStart(2, '0')}`;
         query = query.gte('entry_date', start).lte('entry_date', end);
       } else if (filters?.year) {
         // Year format: 'YYYY'
@@ -306,9 +497,9 @@ export const dbService = {
 
       // Sort by entry_date desc, then created_at desc
       return result.sort((a, b) => {
-        const dateCompare = new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime();
+        const dateCompare = b.entry_date.localeCompare(a.entry_date);
         if (dateCompare !== 0) return dateCompare;
-        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+        return (b.created_at || '').localeCompare(a.created_at || '');
       });
     } else {
       const colors = getLocalColors();
@@ -334,9 +525,9 @@ export const dbService = {
       }
 
       return entries.sort((a, b) => {
-        const dateCompare = new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime();
+        const dateCompare = b.entry_date.localeCompare(a.entry_date);
         if (dateCompare !== 0) return dateCompare;
-        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+        return (b.created_at || '').localeCompare(a.created_at || '');
       });
     }
   },
@@ -418,7 +609,7 @@ export const dbService = {
       };
 
       localEntries[idx] = updated;
-      localStorage.setItem('falltrack_entries', JSON.stringify(localEntries));
+      saveLocalEntries(localEntries);
       return updated;
     }
   },
@@ -433,22 +624,19 @@ export const dbService = {
     } else {
       const localEntries = getLocalEntries();
       const filtered = localEntries.filter(e => e.id !== id);
-      localStorage.setItem('falltrack_entries', JSON.stringify(filtered));
+      saveLocalEntries(filtered);
     }
   },
 
   // Settings / Backup Support
   async importBackupData(backup: { colors: Color[]; rates: Rate[]; entries: ProductionEntry[] }): Promise<void> {
     if (isSupabaseConfigured && supabase) {
-      // Supabase bulk sync - to keep it simple we can bulk insert or let it write local and alert
-      // In Supabase mode, backup restore can be done via SQL, but we will support local override
-      // and print warning. For safety in single-user app:
-      // Let's truncate and insert.
       throw new Error('Backup restore on cloud Supabase is disabled for safety. Use SQL interface.');
     } else {
-      localStorage.setItem('falltrack_colors', JSON.stringify(backup.colors));
-      localStorage.setItem('falltrack_rates', JSON.stringify(backup.rates));
-      localStorage.setItem('falltrack_entries', JSON.stringify(backup.entries));
+      const userId = getActiveUserId();
+      localStorage.setItem(`falltrack_colors_${userId}`, JSON.stringify(backup.colors));
+      localStorage.setItem(`falltrack_rates_${userId}`, JSON.stringify(backup.rates));
+      localStorage.setItem(`falltrack_entries_${userId}`, JSON.stringify(backup.entries));
     }
   },
 
@@ -463,25 +651,52 @@ export const dbService = {
   // Profile Settings API
   async getProfile(): Promise<{ app_name: string; manager_name: string; manager_phone: string }> {
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      let { data, error } = await supabase
         .from('profile')
         .select('app_name, manager_name, manager_phone')
-        .eq('id', true)
         .maybeSingle();
       if (error) throw error;
+
+      if (!data) {
+        // Seed default profile for new user
+        const newProfile = {
+          user_id: user.id,
+          app_name: 'FallTrack',
+          manager_name: user.email?.split('@')[0] || 'Manager',
+          manager_phone: '9876543210'
+        };
+        const { data: inserted, error: insertErr } = await supabase
+          .from('profile')
+          .insert([newProfile])
+          .select()
+          .single();
+        if (insertErr) throw insertErr;
+        data = inserted;
+
+        // Seed default colors for the user
+        const initialColors = SEED_COLORS.map(name => ({
+          name,
+          user_id: user.id
+        }));
+        await supabase.from('colors').insert(initialColors);
+      }
+
       if (data) {
-        // Sync to local cache
-        localStorage.setItem('falltrack_app_name', data.app_name);
-        localStorage.setItem('falltrack_profile_name', data.manager_name);
-        localStorage.setItem('falltrack_profile_phone', data.manager_phone);
+        const userId = user.id;
+        localStorage.setItem(`falltrack_app_name_${userId}`, data.app_name);
+        localStorage.setItem(`falltrack_profile_name_${userId}`, data.manager_name);
+        localStorage.setItem(`falltrack_profile_phone_${userId}`, data.manager_phone);
         return data;
       }
     }
-    // Local fallback
+    const userId = getActiveUserId();
     return {
-      app_name: localStorage.getItem('falltrack_app_name') || 'FallTrack',
-      manager_name: localStorage.getItem('falltrack_profile_name') || 'Rajesh Kumar',
-      manager_phone: localStorage.getItem('falltrack_profile_phone') || '9876543210'
+      app_name: localStorage.getItem(`falltrack_app_name_${userId}`) || 'FallTrack',
+      manager_name: localStorage.getItem(`falltrack_profile_name_${userId}`) || 'Rajesh Kumar',
+      manager_phone: localStorage.getItem(`falltrack_profile_phone_${userId}`) || '9876543210'
     };
   },
 
@@ -490,22 +705,25 @@ export const dbService = {
     const trimmedPhone = phone.trim();
     const trimmedAppName = appName.trim();
 
-    // Local update first
-    localStorage.setItem('falltrack_app_name', trimmedAppName);
-    localStorage.setItem('falltrack_profile_name', trimmedName);
-    localStorage.setItem('falltrack_profile_phone', trimmedPhone);
+    const userId = getActiveUserId();
+    localStorage.setItem(`falltrack_app_name_${userId}`, trimmedAppName);
+    localStorage.setItem(`falltrack_profile_name_${userId}`, trimmedName);
+    localStorage.setItem(`falltrack_profile_phone_${userId}`, trimmedPhone);
 
     if (isSupabaseConfigured && supabase) {
-      const { error } = await supabase
-        .from('profile')
-        .upsert({
-          id: true,
-          app_name: trimmedAppName,
-          manager_name: trimmedName,
-          manager_phone: trimmedPhone,
-          updated_at: new Date().toISOString()
-        });
-      if (error) throw error;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { error } = await supabase
+          .from('profile')
+          .upsert({
+            user_id: user.id,
+            app_name: trimmedAppName,
+            manager_name: trimmedName,
+            manager_phone: trimmedPhone,
+            updated_at: new Date().toISOString()
+          });
+        if (error) throw error;
+      }
     }
   },
 
@@ -525,7 +743,7 @@ export const dbService = {
       }));
     } else {
       return getLocalIncomePeriods().sort(
-        (a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
+        (a, b) => a.start_date.localeCompare(b.start_date)
       );
     }
   },
@@ -556,7 +774,7 @@ export const dbService = {
         created_at: new Date().toISOString()
       };
       periods.push(newPeriod);
-      localStorage.setItem('falltrack_income_periods', JSON.stringify(periods));
+      saveLocalIncomePeriods(periods);
       return newPeriod;
     }
   },
@@ -571,7 +789,22 @@ export const dbService = {
     } else {
       const periods = getLocalIncomePeriods();
       const updated = periods.filter(p => p.id !== id);
-      localStorage.setItem('falltrack_income_periods', JSON.stringify(updated));
+      saveLocalIncomePeriods(updated);
     }
+  },
+
+  // Draft API
+  getDraft(): any {
+    const userId = getActiveUserId();
+    const draft = localStorage.getItem(`falltrack_entry_draft_${userId}`);
+    return draft ? JSON.parse(draft) : null;
+  },
+  saveDraft(rows: any): void {
+    const userId = getActiveUserId();
+    localStorage.setItem(`falltrack_entry_draft_${userId}`, JSON.stringify(rows));
+  },
+  clearDraft(): void {
+    const userId = getActiveUserId();
+    localStorage.removeItem(`falltrack_entry_draft_${userId}`);
   }
 };

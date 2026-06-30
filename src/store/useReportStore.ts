@@ -58,7 +58,8 @@ export const useReportStore = create<ReportState>((set) => ({
       
       // Determine active rate for the end of that month (or latest entry)
       const [year, month] = monthStr.split('-');
-      const lastDayOfMonth = new Date(Number(year), Number(month), 0).toISOString().split('T')[0];
+      const lastDayDate = new Date(Number(year), Number(month), 0);
+      const lastDayOfMonth = `${lastDayDate.getFullYear()}-${String(lastDayDate.getMonth() + 1).padStart(2, '0')}-${String(lastDayDate.getDate()).padStart(2, '0')}`;
       const activeRate = activeRateStore.getActiveRateForDate(lastDayOfMonth);
 
       const totalFalls = entries.reduce((acc, curr) => acc + curr.quantity, 0);

@@ -9,9 +9,11 @@ import {
   Menu, 
   X,
   Palette,
-  Coins
+  Coins,
+  LogOut
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useAuthStore } from '../store/useAuthStore';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -24,6 +26,7 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, appName, profileName, profilePhone }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { signOut, user } = useAuthStore();
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -58,7 +61,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
 
   const getPageSubtitle = () => {
     switch (activeTab) {
-      case 'dashboard': return 'Welcome back, Rajesh';
+      case 'dashboard': return `Welcome back, ${profileName || 'Manager'}`;
       case 'daily-entry': return 'Efficiently log daily fall counts by color.';
       case 'history': return 'Viewing saved production logs';
       case 'reports': return 'Detailed performance and income analytics.';
@@ -129,18 +132,34 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
       </nav>
 
       {/* User Profile Card */}
-      <motion.div 
-        whileHover={{ scale: 1.02, y: -2 }}
-        className="mt-auto p-2.5 bg-slate-50 border border-slate-100 rounded-xl flex items-center gap-2 shadow-sm transition-all duration-300 hover:shadow-soft"
-      >
-        <div className="w-7 h-7 rounded-full bg-brand-light-purple flex items-center justify-center text-brand-primary font-bold border border-brand-light-purple-hover text-xs">
-          {profileName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-        </div>
-        <div className="flex-1 overflow-hidden">
-          <h4 className="text-xs font-bold text-slate-800 truncate">{profileName}</h4>
-          <p className="text-[9px] text-brand-text-muted truncate">{profilePhone}</p>
-        </div>
-      </motion.div>
+      <div className="mt-auto flex flex-col gap-2">
+        <motion.div 
+          whileHover={{ scale: 1.02, y: -2 }}
+          className="p-2.5 bg-slate-50 border border-slate-100 rounded-xl flex items-center gap-2 shadow-sm transition-all duration-300 hover:shadow-soft"
+        >
+          <div className="w-7 h-7 rounded-full bg-brand-light-purple flex items-center justify-center text-brand-primary font-bold border border-brand-light-purple-hover text-xs">
+            {profileName ? profileName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'M'}
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <h4 className="text-xs font-bold text-slate-800 truncate">{profileName}</h4>
+            <p className="text-[9px] text-brand-text-muted truncate">{user?.email || profilePhone}</p>
+          </div>
+        </motion.div>
+        
+        <motion.button
+          onClick={() => {
+            if (window.confirm("Are you sure you want to sign out?")) {
+              signOut();
+            }
+          }}
+          whileHover={{ x: 4 }}
+          whileTap={{ scale: 0.98 }}
+          className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs font-semibold text-red-650 hover:bg-red-50 hover:text-red-700 transition-colors duration-200 cursor-pointer"
+        >
+          <LogOut size={15} />
+          <span>Sign Out</span>
+        </motion.button>
+      </div>
     </div>
   );
 

@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import type { ProductionEntry } from '../types';
+import { getActiveUserId } from '../services/dbService';
 
 /**
  * Renders Devanagari text to a high-DPI canvas and returns a PNG Data URL.
@@ -15,7 +16,7 @@ const renderMarathiTextToImage = (text: string): string => {
   if (ctx) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     // Draw text with a fallback chain supporting Marathi/Devanagari fonts
-    ctx.font = '500 42px "Noto Sans Devanagari", "Poppins", "Kohinoor Devanagari", "Segoe UI", sans-serif';
+    ctx.font = '500 50px "Noto Sans Devanagari", "Poppins", "Kohinoor Devanagari", "Segoe UI", sans-serif';
     ctx.fillStyle = '#3C3C46'; // Matching dark slate row text color
     ctx.textBaseline = 'middle';
     ctx.fillText(text, 0, 40);
@@ -28,6 +29,11 @@ export const exportEntriesToPDF = (
   getActiveRateForDate: (dateStr: string) => number,
   titleText: string = 'FallTrack Production Report'
 ) => {
+  const userId = getActiveUserId();
+  const appName = localStorage.getItem(`falltrack_app_name_${userId}`) || 'FallTrack';
+  const managerName = localStorage.getItem(`falltrack_profile_name_${userId}`) || 'Rajesh Kumar';
+  const managerPhone = localStorage.getItem(`falltrack_profile_phone_${userId}`) || '9876543210';
+
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -39,22 +45,23 @@ export const exportEntriesToPDF = (
 
   // Header Title
   doc.setFontSize(22);
-  doc.setTextColor(92, 62, 163); // Brand color: Deep Indigo #5C3EA3
-  doc.text('FallTrack', 14, 20);
+  doc.setTextColor(2, 132, 199); // Brand color: Sky Blue #0284C7
+  doc.text(appName, 14, 20);
   
   doc.setFontSize(10);
   doc.setTextColor(110, 110, 120);
-  doc.text('Saree Fall Production & Income Management System', 14, 25);
+  doc.text(`Manager: ${managerName} • Phone: ${managerPhone}`, 14, 25);
   
   // Divider
-  doc.setDrawColor(92, 62, 163);
+  doc.setDrawColor(2, 132, 199);
   doc.setLineWidth(0.5);
   doc.line(14, 28, 196, 28);
   
   // Report Title
   doc.setFontSize(14);
   doc.setTextColor(30, 30, 40);
-  doc.text(titleText, 14, 38);
+  const cleanTitle = titleText.replace(/^FallTrack\s+/i, `${appName} `);
+  doc.text(cleanTitle, 14, 38);
   
   // Date Generated & Rate metadata (displayed once here)
   doc.setFontSize(9);
@@ -70,7 +77,7 @@ export const exportEntriesToPDF = (
 
   // Table Headers (no Income column)
   let y = 60;
-  doc.setFillColor(92, 62, 163); // Brand color: Deep Indigo #5C3EA3
+  doc.setFillColor(2, 132, 199); // Brand color: Sky Blue #0284C7
   doc.rect(14, y, 182, 8, 'F');
   
   doc.setFont('Helvetica', 'bold');
@@ -97,7 +104,7 @@ export const exportEntriesToPDF = (
       y = 20;
       
       // Reprint header on new page
-      doc.setFillColor(92, 62, 163); // Brand color: Deep Indigo #5C3EA3
+      doc.setFillColor(2, 132, 199); // Brand color: Sky Blue #0284C7
       doc.rect(14, y, 182, 8, 'F');
       doc.setFont('Helvetica', 'bold');
       doc.setTextColor(255, 255, 255); // High contrast: White
@@ -114,7 +121,7 @@ export const exportEntriesToPDF = (
     
     // Zebra striping
     if (index % 2 === 1) {
-      doc.setFillColor(248, 247, 250); // #F8F7FA
+      doc.setFillColor(240, 249, 255); // #F0F9FF
       doc.rect(14, y, 182, 7, 'F');
     }
     
@@ -135,8 +142,8 @@ export const exportEntriesToPDF = (
     const colorName = e.color?.name || 'Unspecified';
     if (colorName !== 'Unspecified') {
       const colorImgData = renderMarathiTextToImage(colorName);
-      // Position image at X=75, aligned nicely with table rows
-      doc.addImage(colorImgData, 'PNG', 75, y + 1.2, 30, 4);
+      // Position image at X=75, aligned nicely with table rows (increased size)
+      doc.addImage(colorImgData, 'PNG', 75, y + 0.8, 36, 5);
     } else {
       doc.text('Unspecified', 75, y + 5);
     }
@@ -159,23 +166,5 @@ export const exportEntriesToPDF = (
   doc.text(totalFalls.toLocaleString(), 140, y + 5);
   doc.text(`Total Income: Rs. ${totalIncome.toFixed(2)}`, 196, y + 5, { align: 'right' });
   
-  y += 15;
-
-  // Add Font Support / Export Note at the bottom
-  if (y > 275) {
-    doc.addPage();
-    y = 20;
-  }
-  doc.setDrawColor(230, 230, 240);
-  doc.setLineWidth(0.2);
-  doc.line(14, y, 196, y);
-  y += 4;
-  
-  doc.setFont('Helvetica', 'oblique');
-  doc.setFontSize(8);
-  doc.setTextColor(140, 140, 150);
-  doc.text('Note: Marathi color names are rendered using high-DPI browser canvas layouts for PDF compatibility.', 14, y);
-  doc.text('For Devanagari raw text exports, please use the CSV Export option (which has full Marathi Unicode support).', 14, y + 3.5);
-
   doc.save(`FallTrack_${titleText.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
 };

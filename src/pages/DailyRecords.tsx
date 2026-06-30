@@ -10,7 +10,8 @@ import {
   X, 
   Check, 
   Filter,
-  Calendar
+  Calendar,
+  Copy
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -165,6 +166,18 @@ export const DailyRecords: React.FC = () => {
       } catch (err: any) {
         toast.error(`Error deleting record: ${err.message}`);
       }
+    }
+  };
+
+  const handleCopyGroup = (groupEntries: ProductionEntry[]) => {
+    try {
+      const text = groupEntries
+        .map(e => `${e.color?.name || 'Unspecified'} ${e.quantity}`)
+        .join('\n');
+      navigator.clipboard.writeText(text);
+      toast.success("Daily record copied!");
+    } catch (err) {
+      console.warn("Clipboard copy failed:", err);
     }
   };
 
@@ -502,9 +515,18 @@ export const DailyRecords: React.FC = () => {
                             <Calendar size={13} />
                           </div>
                           <div>
-                            <h5 className="text-xs font-extrabold text-slate-800">
-                              {new Date(dateStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                            </h5>
+                            <div className="flex items-center gap-1.5">
+                              <h5 className="text-xs font-extrabold text-slate-800">
+                                {new Date(dateStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                              </h5>
+                              <button
+                                onClick={() => handleCopyGroup(dayEntries)}
+                                className="p-0.5 hover:bg-slate-100 text-slate-400 hover:text-brand-primary rounded transition-all cursor-pointer flex items-center justify-center"
+                                title="Copy day summary"
+                              >
+                                <Copy size={11} />
+                              </button>
+                            </div>
                             <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block mt-0.5">Production Date</span>
                           </div>
                         </div>

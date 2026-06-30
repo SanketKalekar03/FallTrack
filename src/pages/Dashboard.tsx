@@ -3,9 +3,9 @@ import {
   TrendingUp, 
   Calendar, 
   IndianRupee, 
-  FileSpreadsheet, 
   ChevronRight, 
-  PenSquare
+  PenSquare,
+  Sparkles
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useProductionStore } from '../store/useProductionStore';
@@ -88,11 +88,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       title: "Today's Falls",
       value: todayFalls.toLocaleString(),
       label: "Falls",
-      icon: TrendingUp,
+      icon: Sparkles,
       bgColor: "bg-white",
-      accentColor: "text-brand-primary",
-      iconBg: "bg-brand-light-purple",
-      badge: todayFalls > 0 ? { text: "Active", type: "success" } : { text: "No logs today", type: "neutral" }
+      accentColor: "text-sky-600",
+      iconBg: "bg-sky-50",
+      badge: todayFalls > 0 ? { text: "Active", type: "sky" } : { text: "No logs today", type: "neutral" }
     },
     {
       title: "Monthly Falls",
@@ -100,9 +100,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       label: "Falls",
       icon: Calendar,
       bgColor: "bg-white",
-      accentColor: "text-brand-primary",
-      iconBg: "bg-brand-light-purple",
-      badge: { text: "This Month", type: "neutral" }
+      accentColor: "text-amber-600",
+      iconBg: "bg-amber-50",
+      badge: { text: "This Month", type: "amber" }
     },
     {
       title: "Current Rate",
@@ -110,19 +110,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       label: "/ Dozen",
       icon: IndianRupee,
       bgColor: "bg-white",
-      accentColor: "text-amber-600",
-      iconBg: "bg-amber-50",
-      badge: { text: "Standard", type: "amber" }
+      accentColor: "text-emerald-600",
+      iconBg: "bg-emerald-50",
+      badge: { text: "Standard", type: "success" }
     },
     {
       title: "Est. Monthly Income",
       value: `Rs. ${Math.round(estimatedIncome).toLocaleString()}`,
       label: "",
-      icon: FileSpreadsheet,
-      bgColor: "bg-gradient-to-br from-brand-primary to-brand-accent text-white border-0 shadow-lg shadow-brand-primary/15",
-      accentColor: "text-white",
-      iconBg: "bg-white/15",
-      badge: { text: "Estimated", type: "brand" }
+      icon: TrendingUp,
+      bgColor: "bg-white",
+      accentColor: "text-brand-primary",
+      iconBg: "bg-brand-light-purple/40",
+      badge: { text: "Estimated", type: "neutral" }
     }
   ];
 
@@ -225,6 +225,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                   )}
                   {stat.badge.type === 'neutral' && (
                     <span className="text-[9px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                      {stat.badge.text}
+                    </span>
+                  )}
+                  {stat.badge.type === 'sky' && (
+                    <span className="text-[9px] font-bold uppercase tracking-wider bg-sky-50 text-sky-600 px-2 py-0.5 rounded-full">
                       {stat.badge.text}
                     </span>
                   )}

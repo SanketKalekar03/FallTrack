@@ -17,6 +17,7 @@ import { useProductionStore } from '../store/useProductionStore';
 import { useRateStore } from '../store/useRateStore';
 import { MarathiColorSelect } from '../components/MarathiColorSelect';
 import { productionEntrySchema } from '../schemas/validation';
+import { dbService } from '../services/dbService';
 
 interface EntryRow {
   key: string;
@@ -34,16 +35,8 @@ export const DailyEntry: React.FC = () => {
   });
   
   const [rows, setRows] = useState<EntryRow[]>(() => {
-    // Attempt to load draft from localStorage
-    const draft = localStorage.getItem('falltrack_entry_draft');
-    if (draft) {
-      try {
-        return JSON.parse(draft);
-      } catch (e) {
-        // Fallback below
-      }
-    }
-    return [{ key: 'row-0', colorId: '', quantityStr: '0' }];
+    const draft = dbService.getDraft();
+    return draft || [{ key: 'row-0', colorId: '', quantityStr: '0' }];
   });
 
   // Errors map: key -> field errors
@@ -56,7 +49,7 @@ export const DailyEntry: React.FC = () => {
 
   // Auto-save draft to localStorage whenever rows change
   useEffect(() => {
-    localStorage.setItem('falltrack_entry_draft', JSON.stringify(rows));
+    dbService.saveDraft(rows);
   }, [rows]);
 
   const handleAddRow = () => {
@@ -118,7 +111,7 @@ export const DailyEntry: React.FC = () => {
     if (window.confirm("Are you sure you want to clear the draft?")) {
       setRows([{ key: 'row-0', colorId: '', quantityStr: '0' }]);
       setErrors({});
-      localStorage.removeItem('falltrack_entry_draft');
+      dbService.clearDraft();
       toast.success("Draft cleared successfully!");
     }
   };
@@ -174,7 +167,7 @@ export const DailyEntry: React.FC = () => {
       // Reset rows and clear drafts
       setRows([{ key: 'row-0', colorId: '', quantityStr: '0' }]);
       setErrors({});
-      localStorage.removeItem('falltrack_entry_draft');
+      dbService.clearDraft();
     } catch (err: any) {
       toast.error(`Error saving entries: ${err.message || ''}`);
     }
@@ -406,8 +399,6 @@ export const DailyEntry: React.FC = () => {
                 <div className="space-y-2">
                   <AnimatePresence initial={false}>
                     {entries.filter(e => e.entry_date === entryDate).map((entry) => {
-                      const rate = getActiveRateForDate(entry.entry_date);
-                      const earnings = (entry.quantity / 12) * rate;
                       return (
                         <motion.div 
                           key={entry.id} 
@@ -419,9 +410,6 @@ export const DailyEntry: React.FC = () => {
                           <div>
                             <span className="text-xs font-bold text-slate-750 block">
                               {entry.color?.name || 'Unspecified'}
-                            </span>
-                            <span className="text-[8px] text-slate-400 block mt-0.5">
-                              Rate: Rs. {rate.toFixed(2)}/doz • Earned: Rs. {Math.round(earnings)}
                             </span>
                           </div>
                           <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-extrabold bg-brand-light-purple/60 border border-brand-primary/10 text-brand-primary">

@@ -47,7 +47,7 @@ export const IncomePeriods: React.FC = () => {
     try {
       const fetchedPeriods = await dbService.getIncomePeriods();
       const sortedPeriods = fetchedPeriods.sort(
-        (a, b) => new Date(b.end_date).getTime() - new Date(a.end_date).getTime()
+        (a, b) => b.end_date.localeCompare(a.end_date)
       );
       setPeriods(sortedPeriods);
 
@@ -61,7 +61,8 @@ export const IncomePeriods: React.FC = () => {
         setStartDate(nextStart);
         setIsStartDateLocked(true);
         // Default end date to today or nextStart (whichever is later)
-        const today = new Date().toISOString().split('T')[0];
+        const todayObj = new Date();
+        const today = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, '0')}-${String(todayObj.getDate()).padStart(2, '0')}`;
         setEndDate(nextStart > today ? nextStart : today);
       } else {
         // No periods finalized yet, let user pick start date
@@ -69,12 +70,14 @@ export const IncomePeriods: React.FC = () => {
         if (allEntries.length > 0) {
           // Default to the earliest production entry date
           const sortedEntries = [...allEntries].sort(
-            (a, b) => new Date(a.entry_date).getTime() - new Date(b.entry_date).getTime()
+            (a, b) => a.entry_date.localeCompare(b.entry_date)
           );
           setStartDate(sortedEntries[0].entry_date);
-          setEndDate(new Date().toISOString().split('T')[0]);
+          const todayObj = new Date();
+          setEndDate(`${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, '0')}-${String(todayObj.getDate()).padStart(2, '0')}`);
         } else {
-          const today = new Date().toISOString().split('T')[0];
+          const todayObj = new Date();
+          const today = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, '0')}-${String(todayObj.getDate()).padStart(2, '0')}`;
           setStartDate(today);
           setEndDate(today);
         }
@@ -275,12 +278,10 @@ export const IncomePeriods: React.FC = () => {
                   ) : (
                     <div className="max-h-[120px] overflow-y-auto space-y-1.5 pr-1">
                       {filteredEntries.map((e) => {
-                        const rate = getActiveRateForDate(e.entry_date);
-                        const incomeVal = (e.quantity / 12) * rate;
                         return (
                           <div key={e.id} className="flex justify-between items-center bg-white p-2 rounded-lg border border-slate-100/60 text-[10px]">
                             <span className="font-bold text-slate-650">{e.entry_date} • {e.color?.name || 'Unspecified'}</span>
-                            <span className="font-semibold text-slate-500">{e.quantity} Falls (Rs. {Math.round(incomeVal)})</span>
+                            <span className="font-semibold text-slate-500">{e.quantity} Falls</span>
                           </div>
                         );
                       })}
