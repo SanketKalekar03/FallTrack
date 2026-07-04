@@ -31,7 +31,7 @@ export const exportEntriesToPDF = (
 ) => {
   const userId = getActiveUserId();
   const appName = localStorage.getItem(`falltrack_app_name_${userId}`) || 'FallTrack';
-  const managerName = localStorage.getItem(`falltrack_profile_name_${userId}`) || 'Rajesh Kumar';
+  const managerName = localStorage.getItem(`falltrack_profile_name_${userId}`) || 'Manager';
   const managerPhone = localStorage.getItem(`falltrack_profile_phone_${userId}`) || '9876543210';
 
   const doc = new jsPDF({

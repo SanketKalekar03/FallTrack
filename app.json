@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "4675fef8-5003-416e-acd1-a6d98240bf27"
+      }
+    },
+    "android": {
+      "package": "com.sanketkalekar03.falltrack"
+    }
+  }
+}

@@ -11,6 +11,8 @@ import { motion } from 'framer-motion';
 import { useProductionStore } from '../store/useProductionStore';
 import { useRateStore } from '../store/useRateStore';
 import { DashboardChart } from '../components/DashboardChart';
+import { dbService } from '../services/dbService';
+import type { IncomePeriod } from '../types';
 
 interface DashboardProps {
   onNavigate: (tabId: string) => void;
@@ -20,10 +22,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const { entries, fetchEntries } = useProductionStore();
   const { fetchRates, getActiveRateForDate } = useRateStore();
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [periods, setPeriods] = useState<IncomePeriod[]>([]);
 
   useEffect(() => {
     fetchEntries();
     fetchRates();
+    dbService.getIncomePeriods().then(setPeriods).catch(console.warn);
   }, [fetchEntries, fetchRates]);
 
   const getLocalDateString = () => {
@@ -32,17 +36,37 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   };
 
   const todayStr = getLocalDateString();
-  const currentMonthStr = todayStr.substring(0, 7);
 
   const todayEntries = entries.filter(e => e.entry_date === todayStr);
   const todayFalls = todayEntries.reduce((sum, e) => sum + e.quantity, 0);
 
-  const monthlyEntries = entries.filter(e => e.entry_date.startsWith(currentMonthStr));
-  const monthlyFalls = monthlyEntries.reduce((sum, e) => sum + e.quantity, 0);
+  // Calculate the active cycle start date
+  const getActiveCycleStartDate = () => {
+    if (periods.length > 0) {
+      const sorted = [...periods].sort((a, b) => b.end_date.localeCompare(a.end_date));
+      const latest = sorted[0];
+      const [year, month, day] = latest.end_date.split('-').map(Number);
+      const d = new Date(year, month - 1, day);
+      d.setDate(d.getDate() + 1);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    } else if (entries.length > 0) {
+      const sorted = [...entries].sort((a, b) => a.entry_date.localeCompare(b.entry_date));
+      return sorted[0].entry_date;
+    } else {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+  };
+
+  const cycleStartDate = getActiveCycleStartDate();
+
+  // Filter entries in active cycle (from cycleStartDate to today)
+  const cycleEntries = entries.filter(e => e.entry_date >= cycleStartDate);
+  const cycleFalls = cycleEntries.reduce((sum, e) => sum + e.quantity, 0);
 
   const currentRate = getActiveRateForDate(todayStr);
 
-  const estimatedIncome = (monthlyFalls / 12) * currentRate;
+  const estimatedIncome = (cycleFalls / 12) * currentRate;
 
   const sortedByDate = [...entries].sort((a, b) => b.entry_date.localeCompare(a.entry_date));
   const lastEntryDate = sortedByDate.length > 0 ? sortedByDate[0].entry_date : null;
@@ -95,14 +119,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       badge: todayFalls > 0 ? { text: "Active", type: "sky" } : { text: "No logs today", type: "neutral" }
     },
     {
-      title: "Monthly Falls",
-      value: monthlyFalls.toLocaleString(),
+      title: "Cycle Production",
+      value: cycleFalls.toLocaleString(),
       label: "Falls",
       icon: Calendar,
       bgColor: "bg-white",
       accentColor: "text-amber-600",
       iconBg: "bg-amber-50",
-      badge: { text: "This Month", type: "amber" }
+      badge: { text: "Active Cycle", type: "amber" }
     },
     {
       title: "Current Rate",
@@ -115,14 +139,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       badge: { text: "Standard", type: "success" }
     },
     {
-      title: "Est. Monthly Income",
+      title: "Est. Cycle Income",
       value: `Rs. ${Math.round(estimatedIncome).toLocaleString()}`,
       label: "",
       icon: TrendingUp,
       bgColor: "bg-white",
       accentColor: "text-brand-primary",
       iconBg: "bg-brand-light-purple/40",
-      badge: { text: "Estimated", type: "neutral" }
+      badge: { text: "Current Cycle", type: "neutral" }
     }
   ];
 

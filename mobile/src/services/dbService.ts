@@ -170,7 +170,7 @@ const getLocalColors = async (): Promise<Color[]> => {
   const data = await AsyncStorage.getItem(`falltrack_colors_${userId}`);
   if (!data) {
     const initial: Color[] = SEED_COLORS.map(name => ({
-      id: generateUUID(),
+      id: `default-${name}`,
       name,
       created_at: new Date().toISOString()
     }));
@@ -247,6 +247,7 @@ export const dbService = {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           const initialColors = SEED_COLORS.map(name => ({
+            id: `default-${name}`,
             name,
             user_id: user.id
           }));
@@ -260,10 +261,128 @@ export const dbService = {
           }
         }
       }
+
+      // Self-healing duplicates cleanup in Supabase
+      if (data && data.length > 0) {
+        const uniqueNames = new Set<string>();
+        const duplicates: Color[] = [];
+        const keptColorsMap = new Map<string, string>(); // name -> keptId
+
+        // Sort to prioritize standard default IDs or oldest first
+        const sortedData = [...data].sort((a, b) => {
+          const aDefault = a.id.startsWith('default-') || a.id.startsWith('mobile-default');
+          const bDefault = b.id.startsWith('default-') || b.id.startsWith('mobile-default');
+          if (aDefault && !bDefault) return -1;
+          if (!aDefault && bDefault) return 1;
+          return (a.created_at || '').localeCompare(b.created_at || '');
+        });
+
+        const filteredList: Color[] = [];
+
+        for (const col of sortedData) {
+          const normName = col.name.trim().toLowerCase();
+          if (uniqueNames.has(normName)) {
+            duplicates.push(col);
+          } else {
+            uniqueNames.add(normName);
+            keptColorsMap.set(normName, col.id);
+            filteredList.push(col);
+          }
+        }
+
+        if (duplicates.length > 0) {
+          console.log(`Detected ${duplicates.length} duplicate colors in Supabase. Starting cleanup...`);
+          try {
+            for (const dup of duplicates) {
+              const normName = dup.name.trim().toLowerCase();
+              const keptId = keptColorsMap.get(normName);
+              if (keptId) {
+                // Re-point entries referencing the duplicate ID to the kept ID
+                const { error: updateErr } = await supabase
+                  .from('production_entries')
+                  .update({ color_id: keptId })
+                  .eq('color_id', dup.id);
+                if (updateErr) console.warn('Error re-pointing entries during color merge:', updateErr);
+
+                // Delete the duplicate color row
+                const { error: deleteErr } = await supabase
+                  .from('colors')
+                  .delete()
+                  .eq('id', dup.id);
+                if (deleteErr) console.warn('Error deleting duplicate color:', deleteErr);
+              }
+            }
+            console.log('Successfully completed Supabase duplicate colors cleanup!');
+            // Re-fetch clean list
+            const { data: cleanData } = await supabase
+              .from('colors')
+              .select('*')
+              .order('name', { ascending: true });
+            return cleanData || [];
+          } catch (err) {
+            console.warn('Supabase color cleanup error:', err);
+          }
+        }
+      }
+
       return data || [];
     } else {
-      const local = await getLocalColors();
-      return local.sort((a, b) => a.name.localeCompare(b.name));
+      const localColors = await getLocalColors();
+      const entries = await getLocalEntries();
+
+      // Self-healing duplicates cleanup locally
+      const uniqueNames = new Set<string>();
+      const duplicates: Color[] = [];
+      const keptColorsMap = new Map<string, string>(); // name -> keptId
+
+      // Sort to prioritize default/stable IDs or oldest first
+      const sortedColors = [...localColors].sort((a, b) => {
+        const aDefault = a.id.startsWith('default-') || a.id.startsWith('mobile-default');
+        const bDefault = b.id.startsWith('default-') || b.id.startsWith('mobile-default');
+        if (aDefault && !bDefault) return -1;
+        if (!aDefault && bDefault) return 1;
+        return (a.created_at || '').localeCompare(b.created_at || '');
+      });
+
+      const cleanColorsList: Color[] = [];
+
+      for (const col of sortedColors) {
+        const normName = col.name.trim().toLowerCase();
+        if (uniqueNames.has(normName)) {
+          duplicates.push(col);
+        } else {
+          uniqueNames.add(normName);
+          keptColorsMap.set(normName, col.id);
+          cleanColorsList.push(col);
+        }
+      }
+
+      if (duplicates.length > 0) {
+        console.log(`Detected ${duplicates.length} duplicate colors locally. Cleaning up...`);
+        let entriesChanged = false;
+        const updatedEntries = entries.map(e => {
+          if (e.color_id) {
+            const colorObj = localColors.find(c => c.id === e.color_id);
+            if (colorObj) {
+              const normName = colorObj.name.trim().toLowerCase();
+              const keptId = keptColorsMap.get(normName);
+              if (keptId && keptId !== e.color_id) {
+                entriesChanged = true;
+                return { ...e, color_id: keptId };
+              }
+            }
+          }
+          return e;
+        });
+
+        if (entriesChanged) {
+          await saveLocalEntries(updatedEntries);
+        }
+        await saveLocalColors(cleanColorsList);
+        return cleanColorsList.sort((a, b) => a.name.localeCompare(b.name));
+      }
+
+      return localColors.sort((a, b) => a.name.localeCompare(b.name));
     }
   },
 
@@ -658,7 +777,7 @@ export const dbService = {
     const userId = await getActiveUserId();
     return {
       app_name: (await AsyncStorage.getItem(`falltrack_app_name_${userId}`)) || 'FallTrack',
-      manager_name: (await AsyncStorage.getItem(`falltrack_profile_name_${userId}`)) || 'Rajesh Kumar',
+      manager_name: (await AsyncStorage.getItem(`falltrack_profile_name_${userId}`)) || 'Manager',
       manager_phone: (await AsyncStorage.getItem(`falltrack_profile_phone_${userId}`)) || '9876543210'
     };
   },

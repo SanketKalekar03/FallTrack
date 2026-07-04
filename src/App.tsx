@@ -18,7 +18,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   
   const [appName, setAppName] = useState<string>('FallTrack');
-  const [profileName, setProfileName] = useState<string>('Rajesh Kumar');
+  const [profileName, setProfileName] = useState<string>('');
   const [profilePhone, setProfilePhone] = useState<string>('9876543210');
 
   useEffect(() => {
@@ -28,7 +28,7 @@ function App() {
   useEffect(() => {
     if (!user) {
       setAppName('FallTrack');
-      setProfileName('Rajesh Kumar');
+      setProfileName('');
       setProfilePhone('9876543210');
       return;
     }

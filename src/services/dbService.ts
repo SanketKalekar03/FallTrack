@@ -695,7 +695,7 @@ export const dbService = {
     const userId = getActiveUserId();
     return {
       app_name: localStorage.getItem(`falltrack_app_name_${userId}`) || 'FallTrack',
-      manager_name: localStorage.getItem(`falltrack_profile_name_${userId}`) || 'Rajesh Kumar',
+      manager_name: localStorage.getItem(`falltrack_profile_name_${userId}`) || 'Manager',
       manager_phone: localStorage.getItem(`falltrack_profile_phone_${userId}`) || '9876543210'
     };
   },

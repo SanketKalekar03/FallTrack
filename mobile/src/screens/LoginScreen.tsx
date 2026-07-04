@@ -219,6 +219,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 value={email}
                 onChangeText={setEmail}
                 placeholder="name@example.com"
+                placeholderTextColor="#94A3B8"
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -236,6 +237,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 value={password}
                 onChangeText={setPassword}
                 placeholder="••••••••"
+                placeholderTextColor="#94A3B8"
                 secureTextEntry
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -254,6 +256,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
                   placeholder="••••••••"
+                  placeholderTextColor="#94A3B8"
                   secureTextEntry
                   autoCapitalize="none"
                   autoCorrect={false}

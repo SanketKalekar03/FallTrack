@@ -22,7 +22,8 @@ import {
   RotateCcw,
   Sparkles,
   Calendar,
-  X
+  X,
+  ChevronDown
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dbService } from '../services/dbService';
@@ -318,20 +319,27 @@ export const DailyEntryScreen = ({ navigation }: { navigation: any }) => {
         {rows.map((row, index) => (
           <View key={row.key} style={styles.rowCard}>
             <View style={styles.rowIndex}>
-              <Text style={styles.rowIndexText}>{index + 1}</Text>
+              <Text style={styles.rowIndexText}>{String(index + 1).padStart(2, '0')}</Text>
             </View>
 
             {/* Color select input */}
             <TouchableOpacity 
               style={styles.colorSelector}
               onPress={() => openColorPicker(row.key)}
+              activeOpacity={0.7}
             >
-              <Text style={[
-                styles.colorSelectorText,
-                !row.colorName && { color: COLORS.textMuted }
-              ]}>
-                {row.colorName || 'Select Color...'}
-              </Text>
+              <View style={styles.colorSelectorContent}>
+                <Text 
+                  numberOfLines={1}
+                  style={[
+                    styles.colorSelectorText,
+                    !row.colorName && { color: '#94A3B8' }
+                  ]}
+                >
+                  {row.colorName || 'Select Color...'}
+                </Text>
+                <ChevronDown size={14} color="#94A3B8" />
+              </View>
             </TouchableOpacity>
 
             {/* Quantity Input */}
@@ -339,6 +347,7 @@ export const DailyEntryScreen = ({ navigation }: { navigation: any }) => {
               keyboardType="number-pad"
               value={row.quantityStr === '0' ? '' : row.quantityStr}
               placeholder="Falls"
+              placeholderTextColor="#94A3B8"
               onChangeText={(val) => handleQuantityChange(row.key, val)}
               onBlur={() => {
                 if (row.quantityStr === '') {
@@ -352,14 +361,19 @@ export const DailyEntryScreen = ({ navigation }: { navigation: any }) => {
             <TouchableOpacity 
               style={styles.deleteButton}
               onPress={() => handleRemoveRow(row.key)}
+              activeOpacity={0.6}
             >
-              <Trash2 size={18} color={COLORS.textMuted} />
+              <Trash2 size={16} color="#EF4444" />
             </TouchableOpacity>
           </View>
         ))}
 
-        <TouchableOpacity style={styles.addRowButton} onPress={handleAddRow}>
-          <Plus size={18} color={COLORS.primary} />
+        <TouchableOpacity 
+          style={styles.addRowButton} 
+          onPress={handleAddRow}
+          activeOpacity={0.7}
+        >
+          <Plus size={16} color="#0284C7" />
           <Text style={styles.addRowButtonText}>Add Entry Row</Text>
         </TouchableOpacity>
 
@@ -372,17 +386,26 @@ export const DailyEntryScreen = ({ navigation }: { navigation: any }) => {
 
       {/* Bottom Action Footer */}
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-        <TouchableOpacity style={styles.clearButton} onPress={handleResetDraft}>
-          <RotateCcw size={16} color={COLORS.text} style={{ marginRight: 4 }} />
+        <TouchableOpacity 
+          style={styles.clearButton} 
+          onPress={handleResetDraft}
+          activeOpacity={0.7}
+        >
+          <RotateCcw size={15} color="#475569" style={{ marginRight: 6 }} />
           <Text style={styles.clearButtonText}>Clear Draft</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={loading}>
+        <TouchableOpacity 
+          style={styles.saveButton} 
+          onPress={handleSave} 
+          disabled={loading}
+          activeOpacity={0.8}
+        >
           {loading ? (
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
             <>
-              <Save size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+              <Save size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
               <Text style={styles.saveButtonText}>Save Logs</Text>
             </>
           )}
@@ -408,15 +431,35 @@ export const DailyEntryScreen = ({ navigation }: { navigation: any }) => {
 
             {/* Modal Search Bar */}
             <View style={styles.modalSearchBar}>
-              <Search size={16} color={COLORS.textMuted} style={{ marginRight: 8 }} />
+              <Search size={16} color="#94A3B8" style={{ marginRight: 8 }} />
               <TextInput
                 value={searchQuery}
                 placeholder="Type spelling e.g. keshari, rani, लाल"
+                placeholderTextColor="#94A3B8"
                 onChangeText={handleSearchChange}
                 autoFocus
                 style={styles.modalSearchInput}
               />
             </View>
+
+            {/* Quick Select Colors */}
+            {!searchQuery.trim() && colors.length > 0 && (
+              <View style={styles.quickSelectSection}>
+                <Text style={styles.quickSelectTitle}>Quick Select</Text>
+                <View style={styles.quickSelectGrid}>
+                  {colors.slice(0, 12).map((item) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={styles.quickColorPill}
+                      onPress={() => selectColor(item)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.quickColorPillText}>{item.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
 
             {/* Create Color option */}
             {!exactMatchExists && searchQuery.trim().length > 0 && (
@@ -571,35 +614,45 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 8,
-    marginBottom: 8,
-    gap: 8,
+    borderColor: '#F1F5F9',
+    padding: 10,
+    marginBottom: 10,
+    gap: 10,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   rowIndex: {
-    width: 26,
-    height: 26,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 4,
+    width: 28,
+    height: 28,
+    backgroundColor: 'rgba(2, 132, 199, 0.06)',
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
   rowIndexText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
-    color: COLORS.textMuted,
+    color: '#0284C7',
   },
   colorSelector: {
     flex: 1,
-    height: 42,
+    height: 44,
     justifyContent: 'center',
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 6,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+  },
+  colorSelectorContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   colorSelectorText: {
     fontSize: 14,
@@ -608,57 +661,63 @@ const styles = StyleSheet.create({
   },
   quantityInput: {
     width: 85,
-    height: 42,
+    height: 44,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 6,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
     textAlign: 'right',
-    paddingHorizontal: 8,
-    fontSize: 14,
+    paddingHorizontal: 10,
+    fontSize: 15,
     fontWeight: '700',
-    color: COLORS.primary,
+    color: '#0284C7',
   },
   deleteButton: {
-    padding: 6,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(239, 68, 68, 0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   addRowButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    borderWidth: 1,
-    borderColor: COLORS.primary,
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: '#0284C7',
     borderStyle: 'dashed',
-    paddingVertical: 12,
-    borderRadius: 10,
-    marginTop: 6,
-    backgroundColor: 'rgba(92, 62, 163, 0.02)',
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginTop: 8,
+    backgroundColor: 'rgba(2, 132, 199, 0.03)',
   },
   addRowButtonText: {
     fontSize: 14,
     fontWeight: '700',
-    color: COLORS.primary,
+    color: '#0284C7',
   },
   summaryBox: {
-    backgroundColor: COLORS.lavender,
+    backgroundColor: '#F0F9FF',
     borderWidth: 1,
-    borderColor: 'rgba(92, 62, 163, 0.05)',
-    borderRadius: 12,
-    padding: 12,
+    borderColor: '#E0F2FE',
+    borderRadius: 16,
+    padding: 16,
     alignItems: 'center',
-    marginTop: 18,
+    marginTop: 22,
   },
   summaryLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.primary,
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0369A1',
     textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
   summaryValue: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: COLORS.primary,
+    fontSize: 26,
+    fontWeight: '900',
+    color: '#0284C7',
     marginTop: 4,
   },
   footer: {
@@ -675,27 +734,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 10,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
     backgroundColor: '#FFFFFF',
   },
   clearButtonText: {
     fontSize: 14,
     fontWeight: '700',
-    color: COLORS.text,
+    color: '#475569',
   },
   saveButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    backgroundColor: COLORS.primary,
-    borderRadius: 10,
-    shadowColor: COLORS.primary,
+    paddingVertical: 14,
+    backgroundColor: '#0284C7',
+    borderRadius: 12,
+    shadowColor: '#0284C7',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 4,
@@ -708,42 +767,43 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(15, 23, 42, 0.4)',
     justifyContent: 'flex-end',
   },
   modalContent: {
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    height: '60%',
-    padding: 16,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    height: '72%',
+    padding: 20,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   modalHeaderTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: COLORS.text,
     textTransform: 'uppercase',
+    letterSpacing: 0.6,
   },
   modalSearchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    height: 44,
-    marginBottom: 10,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 46,
+    marginBottom: 14,
   },
   modalSearchInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
     color: COLORS.text,
     padding: 0,
@@ -808,5 +868,34 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: COLORS.primary,
+  },
+  quickSelectSection: {
+    marginBottom: 16,
+  },
+  quickSelectTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  quickSelectGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  quickColorPill: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  quickColorPillText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
   },
 });

@@ -46,7 +46,7 @@ export const SettingsScreen = ({ navigation, onLogout, userEmail }: { navigation
 
   // Form states
   const [appName, setAppName] = useState('FallTrack');
-  const [managerName, setManagerName] = useState('Rajesh Kumar');
+  const [managerName, setManagerName] = useState('');
   const [managerPhone, setManagerPhone] = useState('9876543210');
 
   // Color Management states

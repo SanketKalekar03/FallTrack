@@ -141,7 +141,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
             {profileName ? profileName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'M'}
           </div>
           <div className="flex-1 overflow-hidden">
-            <h4 className="text-xs font-bold text-slate-800 truncate">{profileName}</h4>
+            <h4 className="text-xs font-bold text-slate-800 truncate">{profileName || '...'}</h4>
             <p className="text-[9px] text-brand-text-muted truncate">{user?.email || profilePhone}</p>
           </div>
         </motion.div>

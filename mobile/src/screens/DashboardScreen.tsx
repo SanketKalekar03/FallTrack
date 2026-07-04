@@ -25,7 +25,7 @@ export const DashboardScreen = ({ navigation }: { navigation: any }) => {
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [appName, setAppName] = useState('FallTrack');
-  const [managerName, setManagerName] = useState('Rajesh Kumar');
+  const [managerName, setManagerName] = useState('');
   
   // KPI states
   const [todayFalls, setTodayFalls] = useState(0);
@@ -57,25 +57,39 @@ export const DashboardScreen = ({ navigation }: { navigation: any }) => {
       const activeRate = resolveRateForDate(rates, todayStr);
       setCurrentRate(activeRate);
 
-      // 3. Load Entries for Today and this Month
-      const currentYear = new Date().getFullYear();
-      const currentMonth = String(new Date().getMonth() + 1).padStart(2, '0');
-      const monthFilter = `${currentYear}-${currentMonth}`;
-
+      // 3. Load Entries and Custom Income Periods
       const allEntries = await dbService.getProductionEntries();
+      const periods = await dbService.getIncomePeriods();
 
       // Today's total
       const todayEntries = allEntries.filter(e => e.entry_date === todayStr);
       const todaySum = todayEntries.reduce((sum, e) => sum + e.quantity, 0);
       setTodayFalls(todaySum);
 
-      // Monthly total
-      const thisMonthEntries = allEntries.filter(e => e.entry_date.startsWith(monthFilter));
-      const monthlySum = thisMonthEntries.reduce((sum, e) => sum + e.quantity, 0);
-      setMonthlyFalls(monthlySum);
+      // Active cycle start date
+      let cycleStartDate = '';
+      if (periods.length > 0) {
+        const sorted = [...periods].sort((a, b) => b.end_date.localeCompare(a.end_date));
+        const latest = sorted[0];
+        const [year, month, day] = latest.end_date.split('-').map(Number);
+        const d = new Date(year, month - 1, day);
+        d.setDate(d.getDate() + 1);
+        cycleStartDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      } else if (allEntries.length > 0) {
+        const sorted = [...allEntries].sort((a, b) => a.entry_date.localeCompare(b.entry_date));
+        cycleStartDate = sorted[0].entry_date;
+      } else {
+        const d = new Date();
+        cycleStartDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      }
 
-      // Estimate income on monthly volume
-      const estimatedIncome = (monthlySum / 12) * activeRate;
+      // Cycle total
+      const cycleEntries = allEntries.filter(e => e.entry_date >= cycleStartDate);
+      const cycleSum = cycleEntries.reduce((sum, e) => sum + e.quantity, 0);
+      setMonthlyFalls(cycleSum);
+
+      // Estimate income on cycle volume
+      const estimatedIncome = (cycleSum / 12) * activeRate;
       setEstMonthlyIncome(estimatedIncome);
 
       // 4. Get recent entries
@@ -126,7 +140,7 @@ export const DashboardScreen = ({ navigation }: { navigation: any }) => {
             </View>
             <Text style={styles.headerTitle}>{appName}</Text>
           </View>
-          <Text style={styles.headerSubtitle}>Manager: {managerName}</Text>
+          <Text style={styles.headerSubtitle}>Manager: {managerName || '...'}</Text>
         </View>
         <View style={styles.managerControl}>
           <Text style={styles.managerControlText}>Manager Panel</Text>
@@ -171,35 +185,35 @@ export const DashboardScreen = ({ navigation }: { navigation: any }) => {
               </View>
             </View>
 
-            {/* Stat Card 3: Monthly Production */}
+            {/* Stat Card 3: Cycle Production */}
             <View style={styles.statCard}>
-              <Calendar size={80} color="#F59E0B" style={styles.cardWatermark} />
-              
-              <View style={styles.cardHeaderRow}>
-                <View style={styles.cardTextContent}>
-                  <Text style={styles.statLabel}>Monthly Production</Text>
-                  <Text style={styles.statValue}>{monthlyFalls.toLocaleString()}</Text>
-                </View>
-                <View style={[styles.iconWrapper, { backgroundColor: 'rgba(245, 158, 11, 0.08)' }]}>
-                  <Calendar size={20} color="#F59E0B" />
-                </View>
-              </View>
-            </View>
-
-            {/* Stat Card 4: Estimated Monthly Income */}
-            <View style={[styles.statCard, styles.accentCard]}>
-              <TrendingUp size={80} color="#8B5CF6" style={[styles.cardWatermark, { opacity: 0.08 }]} />
-              
-              <View style={styles.cardHeaderRow}>
-                <View style={styles.cardTextContent}>
-                  <Text style={styles.statLabel}>Est. Month Income</Text>
-                  <Text style={styles.statValue}>₹{Math.round(estMonthlyIncome).toLocaleString()}</Text>
-                </View>
-                <View style={[styles.iconWrapper, { backgroundColor: 'rgba(139, 92, 246, 0.08)' }]}>
-                  <TrendingUp size={20} color="#8B5CF6" />
-                </View>
-              </View>
-            </View>
+               <Calendar size={80} color="#F59E0B" style={styles.cardWatermark} />
+               
+               <View style={styles.cardHeaderRow}>
+                 <View style={styles.cardTextContent}>
+                   <Text style={styles.statLabel}>Cycle Production</Text>
+                   <Text style={styles.statValue}>{monthlyFalls.toLocaleString()}</Text>
+                 </View>
+                 <View style={[styles.iconWrapper, { backgroundColor: 'rgba(245, 158, 11, 0.08)' }]}>
+                   <Calendar size={20} color="#F59E0B" />
+                 </View>
+               </View>
+             </View>
+ 
+             {/* Stat Card 4: Estimated Cycle Income */}
+             <View style={[styles.statCard, styles.accentCard]}>
+               <TrendingUp size={80} color="#8B5CF6" style={[styles.cardWatermark, { opacity: 0.08 }]} />
+               
+               <View style={styles.cardHeaderRow}>
+                 <View style={styles.cardTextContent}>
+                   <Text style={styles.statLabel}>Est. Cycle Income</Text>
+                   <Text style={styles.statValue}>₹{Math.round(estMonthlyIncome).toLocaleString()}</Text>
+                 </View>
+                 <View style={[styles.iconWrapper, { backgroundColor: 'rgba(139, 92, 246, 0.08)' }]}>
+                   <TrendingUp size={20} color="#8B5CF6" />
+                 </View>
+               </View>
+             </View>
           </View>
 
           {/* Quick Actions */}
