@@ -120,7 +120,10 @@ export default function App() {
   const splashOpacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    // 1. Entrance animation bounce & fade
+    // 1. Hide native splash screen immediately to reveal JS animated splash screen
+    SplashScreen.hideAsync().catch(() => {});
+
+    // 2. Entrance animation bounce & fade
     Animated.parallel([
       Animated.spring(logoScale, {
         toValue: 1.0,
@@ -135,7 +138,7 @@ export default function App() {
       }),
     ]).start();
 
-    // 2. Start checking auth session
+    // 3. Start checking auth session
     initSession();
   }, []);
 
@@ -193,13 +196,6 @@ export default function App() {
 
       setTimeout(async () => {
         setAuthLoading(false);
-        
-        // Hide native splash screen
-        try {
-          await SplashScreen.hideAsync();
-        } catch (e) {
-          // Ignore
-        }
 
         // Smooth fade out of custom JS splash screen
         Animated.timing(splashOpacity, {
