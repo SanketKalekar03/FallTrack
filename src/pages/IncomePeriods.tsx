@@ -280,7 +280,7 @@ export const IncomePeriods: React.FC = () => {
                       {filteredEntries.map((e) => {
                         return (
                           <div key={e.id} className="flex justify-between items-center bg-white p-2 rounded-lg border border-slate-100/60 text-[10px]">
-                            <span className="font-bold text-slate-650">{e.entry_date} • {e.color?.name || 'Unspecified'}</span>
+                            <span className="font-bold text-slate-650">{e.entry_date.split('-').reverse().join('-')} • {e.color?.name || 'Unspecified'}</span>
                             <span className="font-semibold text-slate-500">{e.quantity} Falls</span>
                           </div>
                         );

@@ -26,6 +26,7 @@ import {
 import { dbService } from '../services/dbService';
 import { COLORS } from '../utils/theme';
 import type { IncomePeriod, ProductionEntry, Rate } from '../types';
+import { formatDateToDDMMYYYY } from '../utils/dateFormatter';
 
 const addOneDay = (dateStr: string): string => {
   const [year, month, day] = dateStr.split('-').map(Number);
@@ -278,7 +279,7 @@ export const IncomeTrackerScreen = ({ navigation }: { navigation: any }) => {
                 >
                   <Calendar size={15} color={COLORS.textMuted} style={{ marginRight: 6 }} />
                   <TextInput
-                    value={startDate}
+                    value={formatDateToDDMMYYYY(startDate)}
                     editable={false}
                     pointerEvents="none"
                     style={styles.textInput}
@@ -296,7 +297,7 @@ export const IncomeTrackerScreen = ({ navigation }: { navigation: any }) => {
                 >
                   <Calendar size={15} color={COLORS.textMuted} style={{ marginRight: 6 }} />
                   <TextInput
-                    value={endDate}
+                    value={formatDateToDDMMYYYY(endDate)}
                     editable={false}
                     pointerEvents="none"
                     style={styles.textInput}
@@ -341,7 +342,7 @@ export const IncomeTrackerScreen = ({ navigation }: { navigation: any }) => {
                 <View style={styles.logPreviewList}>
                   {filteredEntries.slice(0, 3).map((e, idx) => (
                     <Text key={e.id || idx} style={styles.logPreviewItem}>
-                      • {e.entry_date} - {e.color?.name || 'Unspecified'} ({e.quantity} Falls)
+                      • {formatDateToDDMMYYYY(e.entry_date)} - {e.color?.name || 'Unspecified'} ({e.quantity} Falls)
                     </Text>
                   ))}
                   {filteredEntries.length > 3 && (
@@ -375,7 +376,7 @@ export const IncomeTrackerScreen = ({ navigation }: { navigation: any }) => {
                       <View>
                         <Text style={styles.periodName}>{p.period_name}</Text>
                         <Text style={styles.periodDates}>
-                          {p.start_date} to {p.end_date}
+                          {formatDateToDDMMYYYY(p.start_date)} to {formatDateToDDMMYYYY(p.end_date)}
                         </Text>
                       </View>
                       

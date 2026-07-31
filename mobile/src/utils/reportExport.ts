@@ -1,6 +1,7 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import type { ProductionEntry, Rate } from '../types';
+import { formatDateToDDMMYYYY } from './dateFormatter';
 
 // Helper function to generate HTML report content
 const generateHTMLReportContent = (
@@ -15,8 +16,14 @@ const generateHTMLReportContent = (
     return matched ? matched.rate_per_dozen : 5.0;
   };
 
+  const uniqueRates = Array.from(new Set(entries.map(e => getActiveRateForDate(e.entry_date))));
+  const rateText = uniqueRates.length === 1 
+    ? `${uniqueRates[0].toFixed(2)}` 
+    : `${Math.min(...uniqueRates).toFixed(2)} - ${Math.max(...uniqueRates).toFixed(2)}`;
+
   let totalFalls = 0;
   let totalIncome = 0;
+  let lastPrintedDate = '';
 
   const rows = entries.map((e, index) => {
     const rate = getActiveRateForDate(e.entry_date);
@@ -24,11 +31,14 @@ const generateHTMLReportContent = (
     totalFalls += e.quantity;
     totalIncome += income;
 
+    const dateToPrint = e.entry_date === lastPrintedDate ? '' : formatDateToDDMMYYYY(e.entry_date);
+    lastPrintedDate = e.entry_date;
+
     return `
       <tr style="background-color: ${index % 2 === 1 ? '#F8FAFC' : '#FFFFFF'};">
-        <td style="padding: 10px 8px; border-bottom: 1px solid #E2E8F0; font-size: 12px; color: #475569;">${e.entry_date}</td>
-        <td style="padding: 10px 8px; border-bottom: 1px solid #E2E8F0; font-size: 12px; font-weight: 600; color: #1E293B;">${e.color?.name || 'Unspecified'}</td>
-        <td style="padding: 10px 8px; border-bottom: 1px solid #E2E8F0; font-size: 12px; text-align: right; color: #1E293B; font-weight: bold;">${e.quantity.toLocaleString()}</td>
+        <td style="padding: 10px 8px; border-bottom: 1px solid #F1F5F9; font-size: 12px; color: #475569;">${dateToPrint}</td>
+        <td style="padding: 10px 8px; border-bottom: 1px solid #F1F5F9; font-size: 12px; font-weight: 600; color: #334155;">${e.color?.name || 'Unspecified'}</td>
+        <td style="padding: 10px 8px; border-bottom: 1px solid #F1F5F9; font-size: 12px; text-align: right; color: #334155; font-weight: bold; padding-right: 12px;">${e.quantity.toLocaleString()}</td>
       </tr>
     `;
   }).join('');
@@ -40,91 +50,173 @@ const generateHTMLReportContent = (
         <meta charset="utf-8">
         <title>${title}</title>
         <style>
+          @page {
+            margin: 0;
+          }
           body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            padding: 30px;
+            margin: 0;
+            padding: 0;
             color: #334155;
             background-color: #FFFFFF;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
           }
-          .header {
-            border-bottom: 2px solid #0284C7;
-            padding-bottom: 16px;
-            margin-bottom: 24px;
+          .header-container {
+            background-color: #0F172A;
+            padding: 24px 30px;
+            border-bottom: 4px solid #EA580C;
+            color: #FFFFFF;
           }
-          .app-name {
-            font-size: 26px;
+          .header-flex {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+          }
+          .header-left h1 {
+            font-size: 24px;
             font-weight: 800;
-            color: #0284C7;
-            margin: 0 0 4px 0;
-          }
-          .manager-info {
-            font-size: 12px;
-            color: #64748B;
             margin: 0;
-            font-weight: 500;
+            letter-spacing: 0.5px;
           }
-          .report-title {
-            font-size: 18px;
+          .header-left p {
+            font-size: 8px;
+            color: #BAE6FD;
+            margin: 4px 0 0 0;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+          }
+          .header-right {
+            text-align: right;
+          }
+          .header-right h2 {
+            font-size: 12px;
             font-weight: 800;
-            color: #0F172A;
-            margin: 0 0 6px 0;
+            margin: 0;
+            letter-spacing: 0.5px;
           }
-          .meta-row {
+          .header-right p {
+            font-size: 10px;
+            color: #E0F2FE;
+            margin: 4px 0 0 0;
+          }
+          .content {
+            padding: 30px;
+            padding-bottom: 60px;
+          }
+          .report-metadata {
+            margin-bottom: 24px;
+            border-bottom: 1px solid #E2E8F0;
+            padding-bottom: 12px;
+          }
+          .report-metadata-title {
+            font-size: 11px;
+            font-weight: 800;
+            color: #1E293B;
+            margin: 0 0 8px 0;
+            letter-spacing: 0.5px;
+          }
+          .metadata-flex {
+            display: flex;
+            justify-content: space-between;
             font-size: 11px;
             color: #64748B;
-            margin-bottom: 24px;
             font-weight: 500;
+          }
+          .metadata-col {
+            line-height: 1.6;
           }
           table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 30px;
+            margin-top: 10px;
           }
           th {
-            background-color: #0284C7;
+            background-color: #0F172A;
             color: #FFFFFF;
             padding: 10px 8px;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 700;
             text-align: left;
+          }
+          th.text-right {
+            text-align: right;
+            padding-right: 12px;
           }
           .totals-row td {
             border-top: 2px solid #CBD5E1;
             padding: 16px 8px;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 800;
             color: #0F172A;
+          }
+          .footer {
+            position: fixed;
+            bottom: 20px;
+            left: 30px;
+            right: 30px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 9px;
+            color: #94A3B8;
+            border-top: 1px solid #F1F5F9;
+            padding-top: 8px;
           }
         </style>
       </head>
       <body>
-        <div class="header">
-          <h1 class="app-name">${profile.app_name}</h1>
-          <p class="manager-info">Manager: ${profile.manager_name} &bull; Phone: ${profile.manager_phone}</p>
+        <div class="header-container">
+          <div class="header-flex">
+            <div class="header-left">
+              <h1>${profile.app_name.toUpperCase()}</h1>
+              <p>THE ULTIMATE SAREE FALL LEDGER PLATFORM</p>
+            </div>
+            <div class="header-right">
+              <h2>PRODUCTION REPORT</h2>
+              <p>Manager: ${profile.manager_name} &bull; Phone: ${profile.manager_phone}</p>
+              <p style="font-size: 9px; opacity: 0.85; margin: 4px 0 0 0;">Generated: ${new Date().toLocaleDateString('en-IN')} ${new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true })}</p>
+            </div>
+          </div>
         </div>
 
-        <h2 class="report-title">${title}</h2>
-        <div class="meta-row">
-          Report Date: ${new Date().toLocaleDateString('en-IN')} &bull; Total Records: ${entries.length}
+        <div class="content">
+          <div class="report-metadata">
+            <h3 class="report-metadata-title">REPORT METADATA</h3>
+            <div class="metadata-flex">
+              <div class="metadata-col">
+                <div>Cycle Range: ${title.replace(/^FallTrack\s+/i, '')}</div>
+                <div>Rate Card: Rs. ${rateText} per Dozen</div>
+              </div>
+              <div class="metadata-col" style="text-align: right;">
+                <div>Total Log Records: ${entries.length}</div>
+                <div>Export Source: Mobile App</div>
+              </div>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="border-top-left-radius: 4px; border-bottom-left-radius: 4px;">Date</th>
+                <th>Color</th>
+                <th class="text-right" style="border-top-right-radius: 4px; border-bottom-right-radius: 4px;">Falls Count</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+              <tr class="totals-row">
+                <td>Total Summary:</td>
+                <td style="font-weight: 800; color: #0F172A;">${totalFalls.toLocaleString()} Falls</td>
+                <td style="text-align: right; padding-right: 12px; font-weight: 800; color: #0F172A;">Total Income: Rs. ${totalIncome.toFixed(2)}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
-        <table>
-          <thead>
-            <tr>
-              <th style="border-top-left-radius: 6px; border-bottom-left-radius: 6px;">Date</th>
-              <th>Color</th>
-              <th style="text-align: right; border-top-right-radius: 6px; border-bottom-right-radius: 6px; padding-right: 12px;">Falls Count</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows}
-            <tr class="totals-row">
-              <td>Total Summary:</td>
-              <td style="text-align: right;">${totalFalls.toLocaleString()} Falls</td>
-              <td style="text-align: right; padding-right: 12px;">Total Income: Rs. ${totalIncome.toFixed(2)}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="footer">
+          <div>&copy; ${new Date().getFullYear()} ${profile.app_name} Technologies. All rights reserved.</div>
+          <div>Page 1 of 1</div>
+        </div>
       </body>
     </html>
   `;

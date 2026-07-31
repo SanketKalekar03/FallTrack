@@ -3,6 +3,18 @@ import type { ProductionEntry } from '../types';
 import { getActiveUserId } from '../services/dbService';
 
 /**
+ * Formats a date string from YYYY-MM-DD to DD-MM-YYYY for user display.
+ */
+const formatDateToDDMMYYYY = (dateStr: string): string => {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length === 3 && parts[0].length === 4) {
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  }
+  return dateStr;
+};
+
+/**
  * Renders Devanagari text to a high-DPI canvas and returns a PNG Data URL.
  * This utilizes the browser's native text shaper and fonts to ensure Devanagari
  * script ligatures and matras are rendered perfectly without corruption.
@@ -17,7 +29,7 @@ const renderMarathiTextToImage = (text: string): string => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     // Draw text with a fallback chain supporting Marathi/Devanagari fonts
     ctx.font = '500 50px "Noto Sans Devanagari", "Poppins", "Kohinoor Devanagari", "Segoe UI", sans-serif';
-    ctx.fillStyle = '#3C3C46'; // Matching dark slate row text color
+    ctx.fillStyle = '#334155'; // Matching dark slate row text color (#334155)
     ctx.textBaseline = 'middle';
     ctx.fillText(text, 0, 40);
   }
@@ -40,56 +52,97 @@ export const exportEntriesToPDF = (
     format: 'a4'
   });
 
-  // Set default font
+  let pageNumber = 1;
+
+  // Helper to draw standard page footer
+  const addFooter = (pageNum: number) => {
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(148, 163, 184); // #94A3B8 (Muted Slate)
+    doc.text(`© ${new Date().getFullYear()} ${appName} Technologies. All rights reserved.`, 14, 287);
+    doc.text(`Page ${pageNum}`, 196, 287, { align: 'right' });
+  };
+
+  // --- 1. PREMIUM HEADER BLOCK ---
+  // Dark Navy Header Block
+  doc.setFillColor(15, 23, 42); // #0F172A (Dark Navy)
+  doc.rect(0, 0, 210, 24, 'F');
+
+  // Orange Accent Line
+  doc.setFillColor(234, 88, 12); // #EA580C (Orange)
+  doc.rect(0, 24, 210, 2, 'F');
+
+  // App Name
+  doc.setFont('Helvetica', 'bold');
+  doc.setFontSize(20);
+  doc.setTextColor(255, 255, 255);
+  doc.text(appName.toUpperCase(), 14, 15);
+
+  // Subtitle
   doc.setFont('Helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(186, 230, 253); // #BAE6FD (Light sky blue)
+  doc.text('THE ULTIMATE SAREE FALL LEDGER PLATFORM', 14, 20);
 
-  // Header Title
-  doc.setFontSize(22);
-  doc.setTextColor(2, 132, 199); // Brand color: Sky Blue #0284C7
-  doc.text(appName, 14, 20);
-  
+  // Report Title (Right aligned)
+  doc.setFont('Helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(255, 255, 255);
+  doc.text('PRODUCTION REPORT', 196, 11, { align: 'right' });
+
+  // Metadata (Right aligned)
+  doc.setFont('Helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(224, 242, 254); // #E0F2FE (Very light sky blue)
+  doc.text(`Manager: ${managerName}  |  Phone: ${managerPhone}`, 196, 16, { align: 'right' });
+  doc.text(`Generated: ${new Date().toLocaleDateString('en-IN')} ${new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true })}`, 196, 21, { align: 'right' });
+
+  // --- 2. REPORT METADATA SECTION ---
+  doc.setFont('Helvetica', 'bold');
   doc.setFontSize(10);
-  doc.setTextColor(110, 110, 120);
-  doc.text(`Manager: ${managerName} • Phone: ${managerPhone}`, 14, 25);
-  
-  // Divider
-  doc.setDrawColor(2, 132, 199);
-  doc.setLineWidth(0.5);
-  doc.line(14, 28, 196, 28);
-  
-  // Report Title
-  doc.setFontSize(14);
-  doc.setTextColor(30, 30, 40);
-  const cleanTitle = titleText.replace(/^FallTrack\s+/i, `${appName} `);
-  doc.text(cleanTitle, 14, 38);
-  
-  // Date Generated & Rate metadata (displayed once here)
-  doc.setFontSize(9);
-  doc.setTextColor(140, 140, 150);
-  doc.text(`Report Date: ${new Date().toLocaleDateString('en-IN')}`, 14, 44);
-  doc.text(`Total Records: ${entries.length}`, 14, 48);
+  doc.setTextColor(30, 41, 59); // #1E293B (Dark Slate)
+  doc.text('REPORT METADATA', 14, 35);
 
+  // Metadata grid values
+  doc.setFont('Helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(100, 116, 139); // #64748B (Slate Gray)
+  
+  // Left Column
+  const dateRange = titleText.match(/\(([^)]+)\)/)?.[1] || `${new Date().toLocaleDateString('en-IN')}`;
+  doc.text(`Cycle Range: ${dateRange}`, 14, 41);
+  
   const uniqueRates = Array.from(new Set(entries.map(e => getActiveRateForDate(e.entry_date))));
   const rateText = uniqueRates.length === 1 
-    ? `Rs. ${uniqueRates[0].toFixed(2)}` 
-    : `Rs. ${Math.min(...uniqueRates).toFixed(2)} - Rs. ${Math.max(...uniqueRates).toFixed(2)}`;
-  doc.text(`Rate per Dozen: ${rateText}`, 14, 52);
+    ? `Rs. ${uniqueRates[0].toFixed(2)} per Dozen` 
+    : `Rs. ${Math.min(...uniqueRates).toFixed(2)} - Rs. ${Math.max(...uniqueRates).toFixed(2)} per Dozen`;
+  doc.text(`Rate Card: ${rateText}`, 14, 46);
 
-  // Table Headers (no Income column)
-  let y = 60;
-  doc.setFillColor(2, 132, 199); // Brand color: Sky Blue #0284C7
+  // Right Column
+  doc.text(`Total Log Records: ${entries.length}`, 196, 41, { align: 'right' });
+  doc.text(`Export Source: Web Dashboard`, 196, 46, { align: 'right' });
+
+  // Divider line below metadata
+  doc.setDrawColor(226, 232, 240); // #E2E8F0 (Light Gray)
+  doc.setLineWidth(0.4);
+  doc.line(14, 51, 196, 51);
+
+  // --- 3. TABULAR DATA LOGS ---
+  let y = 58;
+  doc.setFillColor(15, 23, 42); // Dark Navy Table Header
   doc.rect(14, y, 182, 8, 'F');
   
   doc.setFont('Helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.setTextColor(255, 255, 255); // High contrast: White
-  doc.text('Date', 20, y + 5);
-  doc.text('Color', 75, y + 5);
-  doc.text('Falls Count', 140, y + 5);
+  doc.setFontSize(9);
+  doc.setTextColor(255, 255, 255); // White header text
+  doc.text('Date', 20, y + 5.5);
+  doc.text('Color', 75, y + 5.5);
+  doc.text('Falls Count', 140, y + 5.5);
   
-  // Reset typography
+  // Reset typography for rows
   doc.setFont('Helvetica', 'normal');
-  doc.setTextColor(60, 60, 70);
+  doc.setFontSize(8.5);
+  doc.setTextColor(51, 65, 85); // #334155 (Dark Slate)
   
   let totalFalls = 0;
   let totalIncome = 0;
@@ -100,30 +153,38 @@ export const exportEntriesToPDF = (
   entries.forEach((e, index) => {
     // Page break handling
     if (y > 270) {
+      addFooter(pageNumber); // Add footer to the completed page before creating a new one
       doc.addPage();
+      pageNumber++;
       y = 20;
       
       // Reprint header on new page
-      doc.setFillColor(2, 132, 199); // Brand color: Sky Blue #0284C7
+      doc.setFillColor(15, 23, 42); // Dark Navy Table Header
       doc.rect(14, y, 182, 8, 'F');
       doc.setFont('Helvetica', 'bold');
-      doc.setTextColor(255, 255, 255); // High contrast: White
-      doc.text('Date', 20, y + 5);
-      doc.text('Color', 75, y + 5);
-      doc.text('Falls Count', 140, y + 5);
+      doc.setFontSize(9);
+      doc.setTextColor(255, 255, 255);
+      doc.text('Date', 20, y + 5.5);
+      doc.text('Color', 75, y + 5.5);
+      doc.text('Falls Count', 140, y + 5.5);
       doc.setFont('Helvetica', 'normal');
-      doc.setTextColor(60, 60, 70);
+      doc.setFontSize(8.5);
+      doc.setTextColor(51, 65, 85);
       y += 8;
       
-      // Reset last printed date on new page to ensure the first row of the page displays the date
       lastPrintedDate = '';
     }
     
-    // Zebra striping
+    // Zebra striping with a soft slate-blue background
     if (index % 2 === 1) {
-      doc.setFillColor(240, 249, 255); // #F0F9FF
+      doc.setFillColor(248, 250, 252); // #F8FAFC
       doc.rect(14, y, 182, 7, 'F');
     }
+    
+    // Row separator line
+    doc.setDrawColor(241, 245, 249); // #F1F5F9 (Very Light Gray)
+    doc.setLineWidth(0.3);
+    doc.line(14, y + 7, 196, y + 7);
     
     const rate = getActiveRateForDate(e.entry_date);
     const income = (e.quantity / 12) * rate;
@@ -132,7 +193,7 @@ export const exportEntriesToPDF = (
     totalIncome += income;
     
     // Format date - print only if it changes, keeping it blank for repeated consecutive dates
-    const dateToPrint = e.entry_date === lastPrintedDate ? '' : e.entry_date;
+    const dateToPrint = e.entry_date === lastPrintedDate ? '' : formatDateToDDMMYYYY(e.entry_date);
     if (dateToPrint) {
       doc.text(dateToPrint, 20, y + 5);
       lastPrintedDate = e.entry_date;
@@ -142,7 +203,6 @@ export const exportEntriesToPDF = (
     const colorName = e.color?.name || 'Unspecified';
     if (colorName !== 'Unspecified') {
       const colorImgData = renderMarathiTextToImage(colorName);
-      // Position image at X=75, aligned nicely with table rows (increased size)
       doc.addImage(colorImgData, 'PNG', 75, y + 0.8, 36, 5);
     } else {
       doc.text('Unspecified', 75, y + 5);
@@ -154,17 +214,21 @@ export const exportEntriesToPDF = (
   });
 
   // Draw line before totals
-  doc.setDrawColor(200, 200, 210);
+  doc.setDrawColor(226, 232, 240); // #E2E8F0
   doc.setLineWidth(0.5);
   doc.line(14, y, 196, y);
   y += 2;
 
-  // Print Totals Row (Total Falls aligned to column, Total Income right-aligned)
+  // Print Totals Row
   doc.setFont('Helvetica', 'bold');
-  doc.setTextColor(30, 30, 40);
+  doc.setFontSize(9);
+  doc.setTextColor(15, 23, 42); // Dark Navy
   doc.text('Total Summary:', 20, y + 5);
   doc.text(totalFalls.toLocaleString(), 140, y + 5);
   doc.text(`Total Income: Rs. ${totalIncome.toFixed(2)}`, 196, y + 5, { align: 'right' });
   
+  // Add footer to the final page
+  addFooter(pageNumber);
+
   doc.save(`FallTrack_${titleText.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
 };

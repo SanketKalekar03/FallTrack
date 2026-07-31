@@ -30,6 +30,7 @@ import { dbService } from '../services/dbService';
 import { matchColor, isExactColorMatch } from '../utils/transliterate';
 import { COLORS } from '../utils/theme';
 import type { Color } from '../types';
+import { formatDateToDDMMYYYY } from '../utils/dateFormatter';
 
 interface EntryRow {
   key: string;
@@ -119,7 +120,16 @@ export const DailyEntryScreen = ({ navigation }: { navigation: any }) => {
     try {
       const draftObj = await dbService.getDraft();
       if (draftObj.rows) setRows(draftObj.rows);
-      if (draftObj.date) setEntryDate(draftObj.date);
+      
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      const todayStr = `${yyyy}-${mm}-${dd}`;
+
+      if (draftObj.date && draftObj.date === todayStr) {
+        setEntryDate(draftObj.date);
+      }
     } catch (err) {
       // Ignored
     }
@@ -316,20 +326,18 @@ export const DailyEntryScreen = ({ navigation }: { navigation: any }) => {
           <Sparkles size={20} color={COLORS.primary} />
           <Text style={styles.dateHeaderTitle}>Log Production</Text>
         </View>
-        <TouchableOpacity 
-          activeOpacity={0.7}
-          onPress={() => setShowDatePicker(true)}
-          style={styles.datePickerWrapper}
+        <View 
+          style={[styles.datePickerWrapper, { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0' }]}
         >
-          <Calendar size={16} color={COLORS.primary} style={{ marginRight: 4 }} />
+          <Calendar size={16} color="#94A3B8" style={{ marginRight: 4 }} />
           <TextInput
-            value={entryDate}
+            value={formatDateToDDMMYYYY(entryDate)}
             editable={false}
             pointerEvents="none"
-            placeholder="YYYY-MM-DD"
-            style={styles.dateInput}
+            placeholder="DD-MM-YYYY"
+            style={[styles.dateInput, { color: '#64748B' }]}
           />
-        </TouchableOpacity>
+        </View>
       </View>
 
       {/* Entry Rows List */}

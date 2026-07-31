@@ -50,7 +50,15 @@ export const migrateLocalDefaultToUserMobile = async (newUserId: string) => {
         const exists = await AsyncStorage.getItem(userKey);
         if (exists === null) {
           await AsyncStorage.setItem(userKey, defaultVal);
+        } else {
+          // Merge local-default values into userKey list to prevent losing them!
+          const defaultList = JSON.parse(defaultVal);
+          const userList = JSON.parse(exists);
+          const merged = [...userList, ...defaultList.filter((d: any) => !userList.some((u: any) => u.id === d.id))];
+          await AsyncStorage.setItem(userKey, JSON.stringify(merged));
         }
+        // Clean up to prevent duplicate migrations
+        await AsyncStorage.removeItem(`falltrack_${key}_local-default`);
       }
     } catch (e) {
       // Ignore
@@ -58,45 +66,76 @@ export const migrateLocalDefaultToUserMobile = async (newUserId: string) => {
   }
 };
 
+const getDeletedEntriesQueue = async (): Promise<string[]> => {
+  const userId = await getActiveUserId();
+  const data = await AsyncStorage.getItem(`falltrack_deleted_entries_${userId}`);
+  return data ? JSON.parse(data) : [];
+};
+
+const queueEntryDeletion = async (id: string): Promise<void> => {
+  const userId = await getActiveUserId();
+  const queue = await getDeletedEntriesQueue();
+  if (!queue.includes(id)) {
+    queue.push(id);
+    await AsyncStorage.setItem(`falltrack_deleted_entries_${userId}`, JSON.stringify(queue));
+  }
+};
+
+const clearDeletedEntryFromQueue = async (id: string): Promise<void> => {
+  const userId = await getActiveUserId();
+  const queue = await getDeletedEntriesQueue();
+  const filtered = queue.filter(qid => qid !== id);
+  await AsyncStorage.setItem(`falltrack_deleted_entries_${userId}`, JSON.stringify(filtered));
+};
+
 export const syncLocalDataToCloudMobile = async (userId: string) => {
   if (!isSupabaseConfigured || !supabase) return;
 
   try {
-    const localColorsStr = await AsyncStorage.getItem(`falltrack_colors_local-default`) || await AsyncStorage.getItem(`falltrack_colors_${userId}`);
-    const localRatesStr = await AsyncStorage.getItem(`falltrack_rates_local-default`) || await AsyncStorage.getItem(`falltrack_rates_${userId}`);
-    const localEntriesStr = await AsyncStorage.getItem(`falltrack_entries_local-default`) || await AsyncStorage.getItem(`falltrack_entries_${userId}`);
-    const localPeriodsStr = await AsyncStorage.getItem(`falltrack_income_periods_local-default`) || await AsyncStorage.getItem(`falltrack_income_periods_${userId}`);
+    // 1. Sync Deletions
+    const deleteQueue = await getDeletedEntriesQueue();
+    if (deleteQueue.length > 0) {
+      console.log(`Syncing ${deleteQueue.length} offline deletions to Supabase...`);
+      for (const id of deleteQueue) {
+        const { error } = await supabase.from('production_entries').delete().eq('id', id);
+        if (!error) {
+          await clearDeletedEntryFromQueue(id);
+        }
+      }
+    }
+
+    const localColorsStr = await AsyncStorage.getItem(`falltrack_colors_${userId}`);
+    const localRatesStr = await AsyncStorage.getItem(`falltrack_rates_${userId}`);
+    const localEntriesStr = await AsyncStorage.getItem(`falltrack_entries_${userId}`);
+    const localPeriodsStr = await AsyncStorage.getItem(`falltrack_income_periods_${userId}`);
 
     const colors: Color[] = localColorsStr ? JSON.parse(localColorsStr) : [];
     const rates: Rate[] = localRatesStr ? JSON.parse(localRatesStr) : [];
-    const entries: ProductionEntry[] = localEntriesStr ? JSON.parse(localEntriesStr) : [];
+    const entries: (ProductionEntry & { synced?: boolean })[] = localEntriesStr ? JSON.parse(localEntriesStr) : [];
     const periods: IncomePeriod[] = localPeriodsStr ? JSON.parse(localPeriodsStr) : [];
 
-    if (colors.length === 0 && rates.length === 0 && entries.length === 0 && periods.length === 0) {
-      return;
-    }
-
-    const syncFlag = await AsyncStorage.getItem(`falltrack_synced_to_cloud_${userId}`);
-    if (syncFlag === 'true') return;
-
     // 2. Sync Colors
-    if (colors.length > 0) {
-      const customColors = colors.filter(c => !c.id.startsWith('default-') && !c.id.startsWith('mobile-default'));
-      if (customColors.length > 0) {
-        const formattedColors = customColors.map(c => ({
-          id: c.id,
-          name: c.name,
-          user_id: userId,
-          created_at: c.created_at
-        }));
-        const { error: colorErr } = await supabase.from('colors').upsert(formattedColors);
-        if (colorErr) console.warn('Color sync warning:', colorErr);
+    const unsyncedColors = colors.filter((c: any) => c.synced === false);
+    if (unsyncedColors.length > 0) {
+      const formattedColors = unsyncedColors.map(c => ({
+        id: c.id,
+        name: c.name,
+        user_id: userId,
+        created_at: c.created_at
+      }));
+      const { error: colorErr } = await supabase.from('colors').upsert(formattedColors);
+      if (!colorErr) {
+        colors.forEach((c: any) => { if (c.synced === false) c.synced = true; });
+        await AsyncStorage.setItem(`falltrack_colors_${userId}`, JSON.stringify(colors));
+      } else {
+        console.warn('Color sync warning:', colorErr);
       }
     }
 
     // 3. Sync Rates
-    if (rates.length > 0) {
-      const formattedRates = rates.map(r => ({
+    const unsyncedRates = rates.filter((r: any) => r.synced === false);
+    if (unsyncedRates.length > 0) {
+      const formattedRates = unsyncedRates.map(r => ({
         id: r.id,
         rate_per_dozen: r.rate_per_dozen,
         effective_from: r.effective_from,
@@ -104,12 +143,18 @@ export const syncLocalDataToCloudMobile = async (userId: string) => {
         created_at: r.created_at
       }));
       const { error: rateErr } = await supabase.from('rates').upsert(formattedRates);
-      if (rateErr) console.warn('Rate sync warning:', rateErr);
+      if (!rateErr) {
+        rates.forEach((r: any) => { if (r.synced === false) r.synced = true; });
+        await AsyncStorage.setItem(`falltrack_rates_${userId}`, JSON.stringify(rates));
+      } else {
+        console.warn('Rate sync warning:', rateErr);
+      }
     }
 
     // 4. Sync Production Entries
-    if (entries.length > 0) {
-      const formattedEntries = entries.map(e => ({
+    const unsyncedEntries = entries.filter(e => e.synced === false);
+    if (unsyncedEntries.length > 0) {
+      const formattedEntries = unsyncedEntries.map(e => ({
         id: e.id,
         entry_date: e.entry_date,
         color_id: e.color_id,
@@ -118,12 +163,18 @@ export const syncLocalDataToCloudMobile = async (userId: string) => {
         created_at: e.created_at
       }));
       const { error: entryErr } = await supabase.from('production_entries').upsert(formattedEntries);
-      if (entryErr) console.warn('Entry sync warning:', entryErr);
+      if (!entryErr) {
+        entries.forEach(e => { if (e.synced === false) e.synced = true; });
+        await AsyncStorage.setItem(`falltrack_entries_${userId}`, JSON.stringify(entries));
+      } else {
+        console.warn('Entry sync warning:', entryErr);
+      }
     }
 
     // 5. Sync Income Periods
-    if (periods.length > 0) {
-      const formattedPeriods = periods.map(p => ({
+    const unsyncedPeriods = periods.filter((p: any) => p.synced === false);
+    if (unsyncedPeriods.length > 0) {
+      const formattedPeriods = unsyncedPeriods.map(p => ({
         id: p.id,
         period_name: p.period_name,
         start_date: p.start_date,
@@ -134,11 +185,15 @@ export const syncLocalDataToCloudMobile = async (userId: string) => {
         created_at: p.created_at
       }));
       const { error: periodErr } = await supabase.from('income_periods').upsert(formattedPeriods);
-      if (periodErr) console.warn('Period sync warning:', periodErr);
+      if (!periodErr) {
+        periods.forEach((p: any) => { if (p.synced === false) p.synced = true; });
+        await AsyncStorage.setItem(`falltrack_income_periods_${userId}`, JSON.stringify(periods));
+      } else {
+        console.warn('Period sync warning:', periodErr);
+      }
     }
 
-    await AsyncStorage.setItem(`falltrack_synced_to_cloud_${userId}`, 'true');
-    console.log('Successfully synced local offline data to Supabase!');
+    console.log('Successfully completed offline background sync checks!');
   } catch (err) {
     console.error('Error syncing local data to Supabase:', err);
   }
@@ -230,103 +285,128 @@ const saveLocalIncomePeriods = async (periods: IncomePeriod[]): Promise<void> =>
   await AsyncStorage.setItem(`falltrack_income_periods_${userId}`, JSON.stringify(periods));
 };
 
+export const withTimeout = (promise: any, ms: number = 3000): Promise<any> => {
+  return Promise.race([
+    promise,
+    new Promise<any>((_, reject) =>
+      setTimeout(() => reject(new Error('Network request timed out')), ms)
+    )
+  ]);
+};
+
 export const dbService = {
   // ==========================================
   // Colors API
   // ==========================================
   async getColors(): Promise<Color[]> {
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('colors')
-        .select('*')
-        .order('name', { ascending: true });
-      if (error) throw error;
-
-      // Self-healing: if color list is empty, seed default colors for the user
-      if (!data || data.length === 0) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const initialColors = SEED_COLORS.map(name => ({
-            id: `default-${name}`,
-            name,
-            user_id: user.id
-          }));
-          const { data: seeded, error: seedErr } = await supabase
+      try {
+        const { data, error } = await withTimeout(
+          supabase
             .from('colors')
-            .insert(initialColors)
-            .select()
-            .order('name', { ascending: true });
-          if (!seedErr && seeded) {
-            return seeded;
-          }
-        }
-      }
+            .select('*')
+            .order('name', { ascending: true })
+        );
+        if (error) throw error;
 
-      // Self-healing duplicates cleanup in Supabase
-      if (data && data.length > 0) {
-        const uniqueNames = new Set<string>();
-        const duplicates: Color[] = [];
-        const keptColorsMap = new Map<string, string>(); // name -> keptId
-
-        // Sort to prioritize standard default IDs or oldest first
-        const sortedData = [...data].sort((a, b) => {
-          const aDefault = a.id.startsWith('default-') || a.id.startsWith('mobile-default');
-          const bDefault = b.id.startsWith('default-') || b.id.startsWith('mobile-default');
-          if (aDefault && !bDefault) return -1;
-          if (!aDefault && bDefault) return 1;
-          return (a.created_at || '').localeCompare(b.created_at || '');
-        });
-
-        const filteredList: Color[] = [];
-
-        for (const col of sortedData) {
-          const normName = col.name.trim().toLowerCase();
-          if (uniqueNames.has(normName)) {
-            duplicates.push(col);
-          } else {
-            uniqueNames.add(normName);
-            keptColorsMap.set(normName, col.id);
-            filteredList.push(col);
-          }
-        }
-
-        if (duplicates.length > 0) {
-          console.log(`Detected ${duplicates.length} duplicate colors in Supabase. Starting cleanup...`);
-          try {
-            for (const dup of duplicates) {
-              const normName = dup.name.trim().toLowerCase();
-              const keptId = keptColorsMap.get(normName);
-              if (keptId) {
-                // Re-point entries referencing the duplicate ID to the kept ID
-                const { error: updateErr } = await supabase
-                  .from('production_entries')
-                  .update({ color_id: keptId })
-                  .eq('color_id', dup.id);
-                if (updateErr) console.warn('Error re-pointing entries during color merge:', updateErr);
-
-                // Delete the duplicate color row
-                const { error: deleteErr } = await supabase
-                  .from('colors')
-                  .delete()
-                  .eq('id', dup.id);
-                if (deleteErr) console.warn('Error deleting duplicate color:', deleteErr);
-              }
-            }
-            console.log('Successfully completed Supabase duplicate colors cleanup!');
-            // Re-fetch clean list
-            const { data: cleanData } = await supabase
+        // Self-healing: if color list is empty, seed default colors for the user
+        if (!data || data.length === 0) {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const initialColors = SEED_COLORS.map(name => ({
+              id: `default-${name}`,
+              name,
+              user_id: user.id
+            }));
+            const { data: seeded, error: seedErr } = await supabase
               .from('colors')
-              .select('*')
+              .insert(initialColors)
+              .select()
               .order('name', { ascending: true });
-            return cleanData || [];
-          } catch (err) {
-            console.warn('Supabase color cleanup error:', err);
+            if (!seedErr && seeded) {
+              await saveLocalColors(seeded);
+              return seeded;
+            }
           }
         }
-      }
 
-      return data || [];
-    } else {
+        // Self-healing duplicates cleanup in Supabase
+        if (data && data.length > 0) {
+          const uniqueNames = new Set<string>();
+          const duplicates: Color[] = [];
+          const keptColorsMap = new Map<string, string>(); // name -> keptId
+
+          // Sort to prioritize standard default IDs or oldest first
+          const sortedData = [...data].sort((a, b) => {
+            const aDefault = a.id.startsWith('default-') || a.id.startsWith('mobile-default');
+            const bDefault = b.id.startsWith('default-') || b.id.startsWith('mobile-default');
+            if (aDefault && !bDefault) return -1;
+            if (!aDefault && bDefault) return 1;
+            return (a.created_at || '').localeCompare(b.created_at || '');
+          });
+
+          const filteredList: Color[] = [];
+
+          for (const col of sortedData) {
+            const normName = col.name.trim().toLowerCase();
+            if (uniqueNames.has(normName)) {
+              duplicates.push(col);
+            } else {
+              uniqueNames.add(normName);
+              keptColorsMap.set(normName, col.id);
+              filteredList.push(col);
+            }
+          }
+
+          if (duplicates.length > 0) {
+            console.log(`Detected ${duplicates.length} duplicate colors in Supabase. Starting cleanup...`);
+            try {
+              for (const dup of duplicates) {
+                const normName = dup.name.trim().toLowerCase();
+                const keptId = keptColorsMap.get(normName);
+                if (keptId) {
+                  // Re-point entries referencing the duplicate ID to the kept ID
+                  const { error: updateErr } = await supabase
+                    .from('production_entries')
+                    .update({ color_id: keptId })
+                    .eq('color_id', dup.id);
+                  if (updateErr) console.warn('Error re-pointing entries during color merge:', updateErr);
+
+                  // Delete the duplicate color row
+                  const { error: deleteErr } = await supabase
+                    .from('colors')
+                    .delete()
+                    .eq('id', dup.id);
+                  if (deleteErr) console.warn('Error deleting duplicate color:', deleteErr);
+                }
+              }
+              console.log('Successfully completed Supabase duplicate colors cleanup!');
+              // Re-fetch clean list
+              const { data: cleanData } = await withTimeout(
+                supabase
+                  .from('colors')
+                  .select('*')
+                  .order('name', { ascending: true })
+              );
+              const finalCleanData = cleanData || [];
+              await saveLocalColors(finalCleanData);
+              return finalCleanData;
+            } catch (err) {
+              console.warn('Supabase color cleanup error:', err);
+            }
+          }
+        }
+
+        const finalData = data || [];
+        await saveLocalColors(finalData);
+        return finalData;
+      } catch (err) {
+        console.warn('Supabase getColors failed, falling back to local storage:', err);
+      }
+    }
+    
+    // Fallback block if offline or not configured
+    {
       const localColors = await getLocalColors();
       const entries = await getLocalEntries();
 
@@ -389,40 +469,51 @@ export const dbService = {
   async createColor(name: string): Promise<Color> {
     const trimmedName = name.trim();
     if (isSupabaseConfigured && supabase) {
-      // Check if it already exists to avoid conflict
-      const { data: existing } = await supabase
-        .from('colors')
-        .select('*')
-        .eq('name', trimmedName)
-        .maybeSingle();
+      try {
+        // Check if it already exists to avoid conflict
+        const { data: existing } = await supabase
+          .from('colors')
+          .select('*')
+          .eq('name', trimmedName)
+          .maybeSingle();
 
-      if (existing) {
-        throw new Error('Color is already present in the list.');
+        if (existing) {
+          throw new Error('Color is already present in the list.');
+        }
+
+        const { data, error } = await supabase
+          .from('colors')
+          .insert([{ name: trimmedName }])
+          .select()
+          .single();
+        if (error) throw error;
+
+        // Cache locally as synced
+        const localColors = await getLocalColors();
+        const newColor = { ...data, synced: true };
+        await saveLocalColors([...localColors.filter(c => c.id !== data.id), newColor]);
+
+        return data;
+      } catch (err: any) {
+        if (err.message === 'Color is already present in the list.') throw err;
+        console.warn('Supabase createColor failed, saving locally:', err);
       }
-
-      const { data, error } = await supabase
-        .from('colors')
-        .insert([{ name: trimmedName }])
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
-    } else {
-      const colors = await getLocalColors();
-      const existing = colors.find(c => c.name.toLowerCase() === trimmedName.toLowerCase());
-      if (existing) {
-        throw new Error('Color is already present in the list.');
-      }
-
-      const newColor: Color = {
-        id: generateUUID(),
-        name: trimmedName,
-        created_at: new Date().toISOString()
-      };
-      colors.push(newColor);
-      await saveLocalColors(colors);
-      return newColor;
     }
+
+    const colors = await getLocalColors();
+    const existing = colors.find(c => c.name.toLowerCase() === trimmedName.toLowerCase());
+    if (existing) {
+      throw new Error('Color is already present in the list.');
+    }
+    const newColor: Color = {
+      id: generateUUID(),
+      name: trimmedName,
+      created_at: new Date().toISOString(),
+      synced: false
+    } as any;
+    colors.push(newColor);
+    await saveLocalColors(colors);
+    return newColor;
   },
 
   async updateColor(id: string, name: string): Promise<Color> {
@@ -495,16 +586,27 @@ export const dbService = {
   // ==========================================
   async getRates(): Promise<Rate[]> {
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('rates')
-        .select('*')
-        .order('effective_from', { ascending: false });
-      if (error) throw error;
-      return (data || []).map(r => ({
-        ...r,
-        rate_per_dozen: Number(r.rate_per_dozen)
-      }));
-    } else {
+      try {
+        const { data, error } = await withTimeout(
+          supabase
+            .from('rates')
+            .select('*')
+            .order('effective_from', { ascending: false })
+        );
+        if (error) throw error;
+        const formatted = (data || []).map((r: any) => ({
+          ...r,
+          rate_per_dozen: Number(r.rate_per_dozen)
+        }));
+        await saveLocalRates(formatted);
+        return formatted;
+      } catch (err) {
+        console.warn('Supabase getRates failed, falling back to local storage:', err);
+      }
+    }
+    
+    // Fallback block if offline or not configured
+    {
       const local = await getLocalRates();
       return local.sort(
         (a, b) => b.effective_from.localeCompare(a.effective_from)
@@ -514,31 +616,43 @@ export const dbService = {
 
   async createRate(rate: Omit<Rate, 'id'>): Promise<Rate> {
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('rates')
-        .insert([{
-          rate_per_dozen: rate.rate_per_dozen,
-          effective_from: rate.effective_from
-        }])
-        .select()
-        .single();
-      if (error) throw error;
-      return {
-        ...data,
-        rate_per_dozen: Number(data.rate_per_dozen)
-      };
-    } else {
-      const rates = await getLocalRates();
-      const newRate: Rate = {
-        id: generateUUID(),
-        rate_per_dozen: rate.rate_per_dozen,
-        effective_from: rate.effective_from,
-        created_at: new Date().toISOString()
-      };
-      rates.push(newRate);
-      await saveLocalRates(rates);
-      return newRate;
+      try {
+        const { data, error } = await supabase
+          .from('rates')
+          .insert([{
+            rate_per_dozen: rate.rate_per_dozen,
+            effective_from: rate.effective_from
+          }])
+          .select()
+          .single();
+        if (error) throw error;
+        
+        const returned = {
+          ...data,
+          rate_per_dozen: Number(data.rate_per_dozen)
+        };
+
+        // Cache locally as synced
+        const rates = await getLocalRates();
+        await saveLocalRates([...rates.filter(r => r.id !== returned.id), { ...returned, synced: true }]);
+
+        return returned;
+      } catch (err) {
+        console.warn('Supabase createRate failed, saving locally:', err);
+      }
     }
+
+    const rates = await getLocalRates();
+    const newRate: Rate = {
+      id: generateUUID(),
+      rate_per_dozen: rate.rate_per_dozen,
+      effective_from: rate.effective_from,
+      created_at: new Date().toISOString(),
+      synced: false
+    } as any;
+    rates.push(newRate);
+    await saveLocalRates(rates);
+    return newRate;
   },
 
   async deleteRate(id: string): Promise<void> {
@@ -565,116 +679,172 @@ export const dbService = {
     year?: string;  // YYYY
     search?: string; // color name
   }): Promise<ProductionEntry[]> {
+    let result: ProductionEntry[] = [];
+    let fetchedFromCloud = false;
+
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('production_entries')
-        .select('*, color:colors(*)');
+      try {
+        const { data, error } = await withTimeout(
+          supabase
+            .from('production_entries')
+            .select('*, color:colors(*)')
+        );
 
-      if (error) throw error;
+        if (error) throw error;
 
-      let result: ProductionEntry[] = (data || []).map(item => ({
-        id: item.id,
-        entry_date: item.entry_date,
-        color_id: item.color_id,
-        quantity: item.quantity,
-        created_at: item.created_at,
-        color: item.color ? { id: item.color.id, name: item.color.name } : undefined
-      }));
+        result = (data || []).map((item: any) => ({
+          id: item.id,
+          entry_date: item.entry_date,
+          color_id: item.color_id,
+          quantity: item.quantity,
+          created_at: item.created_at,
+          color: item.color ? { id: item.color.id, name: item.color.name } : undefined
+        }));
 
-      if (filters?.startDate) {
-        result = result.filter(e => e.entry_date >= filters.startDate!);
+        // Merge cache: Keep local unsynced, filter out offline deleted
+        const local = await getLocalEntries();
+        const unsynced = local.filter((e: any) => e.synced === false);
+        const deleteQueue = await getDeletedEntriesQueue();
+
+        result = result.filter(e => !deleteQueue.includes(e.id));
+
+        const cleanEntries = (data || []).map((item: any) => ({
+          id: item.id,
+          entry_date: item.entry_date,
+          color_id: item.color_id,
+          quantity: item.quantity,
+          created_at: item.created_at,
+          synced: true
+        })).filter((e: any) => !deleteQueue.includes(e.id));
+
+        const merged = [...unsynced, ...cleanEntries];
+        await saveLocalEntries(merged);
+        fetchedFromCloud = true;
+      } catch (err) {
+        console.warn('Supabase getProductionEntries failed, falling back to local storage:', err);
       }
-      if (filters?.endDate) {
-        result = result.filter(e => e.entry_date <= filters.endDate!);
-      }
-      if (filters?.month) {
-        result = result.filter(e => e.entry_date.startsWith(filters.month!));
-      } else if (filters?.year) {
-        result = result.filter(e => e.entry_date.startsWith(filters.year!));
-      }
+    }
 
-      if (filters?.search) {
-        result = result.filter(e => e.color ? matchColor(e.color.name, filters.search!) : false);
-      }
-
-      return result.sort((a, b) => {
-        const dateCompare = b.entry_date.localeCompare(a.entry_date);
-        if (dateCompare !== 0) return dateCompare;
-        return (b.created_at || '').localeCompare(a.created_at || '');
-      });
-    } else {
+    if (!fetchedFromCloud) {
       const colors = await getLocalColors();
       const localEntries = await getLocalEntries();
-      let entries = localEntries.map(e => ({
-        ...e,
-        color: colors.find(c => c.id === e.color_id)
-      }));
-
-      if (filters?.startDate) {
-        entries = entries.filter(e => e.entry_date >= filters.startDate!);
-      }
-      if (filters?.endDate) {
-        entries = entries.filter(e => e.entry_date <= filters.endDate!);
-      }
-      if (filters?.month) {
-        entries = entries.filter(e => e.entry_date.startsWith(filters.month!));
-      } else if (filters?.year) {
-        entries = entries.filter(e => e.entry_date.startsWith(filters.year!));
-      }
-
-      if (filters?.search) {
-        entries = entries.filter(e => e.color ? matchColor(e.color.name, filters.search!) : false);
-      }
-
-      return entries.sort((a, b) => {
-        const dateCompare = b.entry_date.localeCompare(a.entry_date);
-        if (dateCompare !== 0) return dateCompare;
-        return (b.created_at || '').localeCompare(a.created_at || '');
+      const deleteQueue = await getDeletedEntriesQueue();
+      
+      result = localEntries
+        .filter(e => !deleteQueue.includes(e.id))
+        .map(e => ({
+          ...e,
+          color: colors.find(c => c.id === e.color_id)
+        }));
+    } else {
+      // Populate colors for unsynced local entries in final list
+      const colors = await getLocalColors();
+      result = result.map(e => {
+        if (!e.color && e.color_id) {
+          return {
+            ...e,
+            color: colors.find(c => c.id === e.color_id)
+          };
+        }
+        return e;
       });
     }
+
+    // Deduplicate list by entry ID
+    const seenIds = new Set<string>();
+    result = result.filter(e => {
+      if (seenIds.has(e.id)) return false;
+      seenIds.add(e.id);
+      return true;
+    });
+
+    // Apply filters
+    if (filters?.startDate) {
+      result = result.filter(e => e.entry_date >= filters.startDate!);
+    }
+    if (filters?.endDate) {
+      result = result.filter(e => e.entry_date <= filters.endDate!);
+    }
+    if (filters?.month) {
+      result = result.filter(e => e.entry_date.startsWith(filters.month!));
+    } else if (filters?.year) {
+      result = result.filter(e => e.entry_date.startsWith(filters.year!));
+    }
+
+    if (filters?.search) {
+      result = result.filter(e => e.color ? matchColor(e.color.name, filters.search!) : false);
+    }
+
+    return result.sort((a, b) => {
+      const dateCompare = b.entry_date.localeCompare(a.entry_date);
+      if (dateCompare !== 0) return dateCompare;
+      return (b.created_at || '').localeCompare(a.created_at || '');
+    });
   },
 
   async saveProductionEntries(entries: Omit<ProductionEntry, 'id'>[]): Promise<ProductionEntry[]> {
     if (isSupabaseConfigured && supabase) {
-      const formatted = entries.map(e => ({
-        entry_date: e.entry_date,
-        color_id: e.color_id,
-        quantity: e.quantity
-      }));
-      const { data, error } = await supabase
-        .from('production_entries')
-        .insert(formatted)
-        .select('*, color:colors(*)');
-      if (error) throw error;
-      return (data || []).map(item => ({
-        id: item.id,
-        entry_date: item.entry_date,
-        color_id: item.color_id,
-        quantity: item.quantity,
-        created_at: item.created_at,
-        color: item.color ? { id: item.color.id, name: item.color.name } : undefined
-      }));
-    } else {
-      const localEntries = await getLocalEntries();
-      const colors = await getLocalColors();
-      const saved: ProductionEntry[] = [];
+      try {
+        const formatted = entries.map(e => ({
+          entry_date: e.entry_date,
+          color_id: e.color_id,
+          quantity: e.quantity
+        }));
+        const { data, error } = await supabase
+          .from('production_entries')
+          .insert(formatted)
+          .select('*, color:colors(*)');
+        if (error) throw error;
 
-      entries.forEach(e => {
-        const newEntry: ProductionEntry = {
-          id: generateUUID(),
+        const returned = (data || []).map(item => ({
+          id: item.id,
+          entry_date: item.entry_date,
+          color_id: item.color_id,
+          quantity: item.quantity,
+          created_at: item.created_at,
+          color: item.color ? { id: item.color.id, name: item.color.name } : undefined,
+          synced: true
+        }));
+
+        // Merge cache: Keep local unsynced, append online created
+        const local = await getLocalEntries();
+        const cleanReturned = returned.map(e => ({
+          id: e.id,
           entry_date: e.entry_date,
           color_id: e.color_id,
           quantity: e.quantity,
-          created_at: new Date().toISOString(),
-          color: colors.find(c => c.id === e.color_id)
-        };
-        localEntries.push(newEntry);
-        saved.push(newEntry);
-      });
+          created_at: e.created_at,
+          synced: true
+        }));
+        const merged = [...local.filter((e: any) => e.synced === false), ...cleanReturned];
+        await saveLocalEntries(merged);
 
-      await saveLocalEntries(localEntries);
-      return saved;
+        return returned;
+      } catch (err) {
+        console.warn('Supabase saveProductionEntries failed, saving locally:', err);
+      }
     }
+
+    const localEntries = await getLocalEntries();
+    const colors = await getLocalColors();
+    const saved: ProductionEntry[] = [];
+
+    entries.forEach(e => {
+      const newEntry: ProductionEntry = {
+        id: generateUUID(),
+        entry_date: e.entry_date,
+        color_id: e.color_id,
+        quantity: e.quantity,
+        created_at: new Date().toISOString(),
+        color: colors.find(c => c.id === e.color_id),
+        synced: false
+      } as any;
+      localEntries.push(newEntry);
+      saved.push(newEntry);
+    });
+
+    await saveLocalEntries(localEntries);
+    return saved;
   },
 
   async updateProductionEntry(id: string, entry: Partial<ProductionEntry>): Promise<ProductionEntry> {
@@ -718,60 +888,73 @@ export const dbService = {
 
   async deleteProductionEntry(id: string): Promise<void> {
     if (isSupabaseConfigured && supabase) {
-      const { error } = await supabase
-        .from('production_entries')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
+      try {
+        const { error } = await supabase
+          .from('production_entries')
+          .delete()
+          .eq('id', id);
+        if (error) throw error;
+      } catch (err) {
+        console.warn('Supabase deleteProductionEntry failed, queueing deletion:', err);
+        await queueEntryDeletion(id);
+      }
     } else {
-      const localEntries = await getLocalEntries();
-      const filtered = localEntries.filter(e => e.id !== id);
-      await saveLocalEntries(filtered);
+      await queueEntryDeletion(id);
     }
+
+    const localEntries = await getLocalEntries();
+    const filtered = localEntries.filter(e => e.id !== id);
+    await saveLocalEntries(filtered);
   },
 
   // Profile Settings API
   async getProfile(): Promise<{ app_name: string; manager_name: string; manager_phone: string }> {
     if (isSupabaseConfigured && supabase) {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      let { data, error } = await supabase
-        .from('profile')
-        .select('app_name, manager_name, manager_phone')
-        .maybeSingle();
-      if (error) throw error;
-
-      if (!data) {
-        // Seed default profile for new user
-        const newProfile = {
-          user_id: user.id,
-          app_name: 'FallTrack',
-          manager_name: user.email?.split('@')[0] || 'Manager',
-          manager_phone: '9876543210'
-        };
-        const { data: inserted, error: insertErr } = await supabase
-          .from('profile')
-          .insert([newProfile])
-          .select()
-          .single();
-        if (insertErr) throw insertErr;
-        data = inserted;
-
-        // Seed default colors for the user
-        const initialColors = SEED_COLORS.map(name => ({
-          name,
-          user_id: user.id
-        }));
-        await supabase.from('colors').insert(initialColors);
-      }
-
-      if (data) {
-        const userId = user.id;
-        await AsyncStorage.setItem(`falltrack_app_name_${userId}`, data.app_name);
-        await AsyncStorage.setItem(`falltrack_profile_name_${userId}`, data.manager_name);
-        await AsyncStorage.setItem(`falltrack_profile_phone_${userId}`, data.manager_phone);
-        return data;
+      try {
+        const { data: { user } } = await withTimeout(supabase.auth.getUser());
+        if (user) {
+          let { data, error } = await withTimeout(
+            supabase
+              .from('profile')
+              .select('app_name, manager_name, manager_phone')
+              .maybeSingle()
+          );
+          if (error) throw error;
+    
+          if (!data) {
+            // Seed default profile for new user
+            const newProfile = {
+              user_id: user.id,
+              app_name: 'FallTrack',
+              manager_name: user.email?.split('@')[0] || 'Manager',
+              manager_phone: '9876543210'
+            };
+            const { data: inserted, error: insertErr } = await supabase
+              .from('profile')
+              .insert([newProfile])
+              .select()
+              .single();
+            if (insertErr) throw insertErr;
+            data = inserted;
+    
+            // Seed default colors for the user
+            const initialColors = SEED_COLORS.map(name => ({
+              name,
+              user_id: user.id
+            }));
+            await supabase.from('colors').insert(initialColors);
+          }
+    
+          if (data) {
+            const userId = user.id;
+            await AsyncStorage.setItem(`falltrack_app_name_${userId}`, data.app_name);
+            await AsyncStorage.setItem(`falltrack_profile_name_${userId}`, data.manager_name);
+            await AsyncStorage.setItem(`falltrack_profile_phone_${userId}`, data.manager_phone);
+            return data;
+          }
+        }
+      } catch (err) {
+        console.warn('Supabase getProfile failed, falling back to local storage:', err);
       }
     }
     const userId = await getActiveUserId();
@@ -812,16 +995,27 @@ export const dbService = {
   // Custom Income Periods API
   async getIncomePeriods(): Promise<IncomePeriod[]> {
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('income_periods')
-        .select('*')
-        .order('start_date', { ascending: true });
-      if (error) throw error;
-      return (data || []).map(p => ({
-        ...p,
-        total_income: Number(p.total_income)
-      }));
-    } else {
+      try {
+        const { data, error } = await withTimeout(
+          supabase
+            .from('income_periods')
+            .select('*')
+            .order('start_date', { ascending: true })
+        );
+        if (error) throw error;
+        const formatted = (data || []).map((p: any) => ({
+          ...p,
+          total_income: Number(p.total_income)
+        }));
+        await saveLocalIncomePeriods(formatted);
+        return formatted;
+      } catch (err) {
+        console.warn('Supabase getIncomePeriods failed, falling back to local storage:', err);
+      }
+    }
+    
+    // Fallback block if offline or not configured
+    {
       const local = await getLocalIncomePeriods();
       return local.sort(
         (a, b) => a.start_date.localeCompare(b.start_date)
@@ -831,47 +1025,62 @@ export const dbService = {
 
   async createIncomePeriod(period: Omit<IncomePeriod, 'id'>): Promise<IncomePeriod> {
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('income_periods')
-        .insert([{
-          period_name: period.period_name,
-          start_date: period.start_date,
-          end_date: period.end_date,
-          total_falls: period.total_falls,
-          total_income: period.total_income
-        }])
-        .select()
-        .single();
-      if (error) throw error;
-      return {
-        ...data,
-        total_income: Number(data.total_income)
-      };
-    } else {
-      const periods = await getLocalIncomePeriods();
-      const newPeriod: IncomePeriod = {
-        id: generateUUID(),
-        ...period,
-        created_at: new Date().toISOString()
-      };
-      periods.push(newPeriod);
-      await saveLocalIncomePeriods(periods);
-      return newPeriod;
+      try {
+        const { data, error } = await supabase
+          .from('income_periods')
+          .insert([{
+            period_name: period.period_name,
+            start_date: period.start_date,
+            end_date: period.end_date,
+            total_falls: period.total_falls,
+            total_income: period.total_income
+          }])
+          .select()
+          .single();
+        if (error) throw error;
+
+        const returned = {
+          ...data,
+          total_income: Number(data.total_income)
+        };
+
+        // Cache locally as synced
+        const periods = await getLocalIncomePeriods();
+        await saveLocalIncomePeriods([...periods.filter(p => p.id !== returned.id), { ...returned, synced: true }]);
+
+        return returned;
+      } catch (err) {
+        console.warn('Supabase createIncomePeriod failed, saving locally:', err);
+      }
     }
+
+    const periods = await getLocalIncomePeriods();
+    const newPeriod: IncomePeriod = {
+      id: generateUUID(),
+      ...period,
+      created_at: new Date().toISOString(),
+      synced: false
+    } as any;
+    periods.push(newPeriod);
+    await saveLocalIncomePeriods(periods);
+    return newPeriod;
   },
 
   async deleteIncomePeriod(id: string): Promise<void> {
     if (isSupabaseConfigured && supabase) {
-      const { error } = await supabase
-        .from('income_periods')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
-    } else {
-      const periods = await getLocalIncomePeriods();
-      const updated = periods.filter(p => p.id !== id);
-      await saveLocalIncomePeriods(updated);
+      try {
+        const { error } = await supabase
+          .from('income_periods')
+          .delete()
+          .eq('id', id);
+        if (error) throw error;
+      } catch (err) {
+        console.warn('Supabase deleteIncomePeriod failed, deleting locally:', err);
+      }
     }
+    const periods = await getLocalIncomePeriods();
+    const updated = periods.filter(p => p.id !== id);
+    await saveLocalIncomePeriods(updated);
   },
 
   // Draft API
@@ -893,5 +1102,63 @@ export const dbService = {
     const userId = await getActiveUserId();
     await AsyncStorage.removeItem(`falltrack_mobile_draft_rows_${userId}`);
     await AsyncStorage.removeItem(`falltrack_mobile_draft_date_${userId}`);
+  }
+};
+
+export const cleanDatabaseDuplicatesOneTime = async () => {
+  if (!isSupabaseConfigured || !supabase) return;
+  
+  try {
+    const cleanedFlag = await AsyncStorage.getItem('falltrack_duplicates_cleaned_v2');
+    if (cleanedFlag === 'true') return;
+    
+    console.log('Running one-time database duplicate cleanup...');
+    const { data: entries, error } = await supabase
+      .from('production_entries')
+      .select('*');
+      
+    if (error || !entries || entries.length === 0) return;
+    
+    const cleanPairs = [
+      { source: '2026-07-11', target: '2026-07-05' },
+      { source: '2026-07-12', target: '2026-07-07' }
+    ];
+    
+    const idsToDelete: string[] = [];
+    
+    for (const pair of cleanPairs) {
+      const sourceEntries = entries.filter(e => e.entry_date === pair.source);
+      let targetEntries = entries.filter(e => e.entry_date === pair.target);
+      
+      if (sourceEntries.length > 0 && targetEntries.length > 0) {
+        for (const source of sourceEntries) {
+          const matchIdx = targetEntries.findIndex(
+            t => t.color_id === source.color_id && t.quantity === source.quantity
+          );
+          if (matchIdx !== -1) {
+            idsToDelete.push(targetEntries[matchIdx].id);
+            targetEntries = targetEntries.filter((_, idx) => idx !== matchIdx);
+          }
+        }
+      }
+    }
+    
+    if (idsToDelete.length > 0) {
+      console.log(`Deleting ${idsToDelete.length} duplicate entries from Supabase...`);
+      const { error: delErr } = await supabase
+        .from('production_entries')
+        .delete()
+        .in('id', idsToDelete);
+        
+      if (delErr) {
+        console.warn('Cleanup delete error:', delErr);
+        return;
+      }
+    }
+    
+    await AsyncStorage.setItem('falltrack_duplicates_cleaned_v2', 'true');
+    console.log('Successfully cleaned up duplicate entries in Supabase!');
+  } catch (err) {
+    console.error('Error running duplicate cleanup:', err);
   }
 };

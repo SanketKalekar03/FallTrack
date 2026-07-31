@@ -8,6 +8,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import packageJson from './package.json';
 
 // Keep native splash screen visible while loading custom JS animations
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -22,7 +23,7 @@ import {
 
 // Lib/Supabase
 import { supabase, isSupabaseConfigured } from './src/lib/supabase';
-import { syncLocalDataToCloudMobile } from './src/services/dbService';
+import { syncLocalDataToCloudMobile, withTimeout, cleanDatabaseDuplicatesOneTime } from './src/services/dbService';
 
 // Screens
 import { DashboardScreen } from './src/screens/DashboardScreen';
@@ -147,25 +148,49 @@ export default function App() {
     setAuthLoading(true);
     try {
       if (isSupabaseConfigured && supabase) {
-        const { data: { session } } = await supabase.auth.getSession();
+        let session = null;
+        try {
+          const { data } = await withTimeout(supabase.auth.getSession(), 3000);
+          session = data?.session || null;
+        } catch (e) {
+          console.warn('Supabase getSession failed or timed out:', e);
+        }
+
         if (session && session.user) {
           const u = session.user;
           await AsyncStorage.setItem('falltrack_active_user_id', u.id);
           await syncLocalDataToCloudMobile(u.id);
+          await cleanDatabaseDuplicatesOneTime();
           setUser({ id: u.id, email: u.email || '' });
         } else {
-          await AsyncStorage.removeItem('falltrack_active_user_id');
-          setUser(null);
+          // Fall back to local session if present, to prevent automatic logouts when offline
+          const activeUserId = await AsyncStorage.getItem('falltrack_active_user_id');
+          const localUsersData = await AsyncStorage.getItem('falltrack_local_users');
+          const localUsers: any[] = localUsersData ? JSON.parse(localUsersData) : [];
+          if (activeUserId) {
+            const matched = localUsers.find(u => u.id === activeUserId);
+            if (matched) {
+              console.log('Online session check failed/null, falling back to local session:', matched.email);
+              setUser({ id: matched.id, email: matched.email });
+            } else {
+              await AsyncStorage.removeItem('falltrack_active_user_id');
+              setUser(null);
+            }
+          } else {
+            setUser(null);
+          }
         }
 
         // Listen for auth changes
-        supabase.auth.onAuthStateChange(async (_event, session) => {
+        supabase.auth.onAuthStateChange(async (event, session) => {
           if (session && session.user) {
             const u = session.user;
             await AsyncStorage.setItem('falltrack_active_user_id', u.id);
             await syncLocalDataToCloudMobile(u.id);
+            await cleanDatabaseDuplicatesOneTime();
             setUser({ id: u.id, email: u.email || '' });
-          } else {
+          } else if (event === 'SIGNED_OUT') {
+            // Only clear the session on explicit logout events
             await AsyncStorage.removeItem('falltrack_active_user_id');
             setUser(null);
           }
@@ -188,7 +213,25 @@ export default function App() {
         }
       }
     } catch (e) {
-      console.warn('Auth init failed:', e);
+      console.warn('Auth init failed (likely offline), falling back to offline session check:', e);
+      try {
+        const activeUserId = await AsyncStorage.getItem('falltrack_active_user_id');
+        const localUsersData = await AsyncStorage.getItem('falltrack_local_users');
+        const localUsers: any[] = localUsersData ? JSON.parse(localUsersData) : [];
+        if (activeUserId) {
+          const matched = localUsers.find(u => u.id === activeUserId);
+          if (matched) {
+            setUser({ id: matched.id, email: matched.email });
+          } else {
+            await AsyncStorage.removeItem('falltrack_active_user_id');
+            setUser(null);
+          }
+        } else {
+          setUser(null);
+        }
+      } catch (localErr) {
+        setUser(null);
+      }
     } finally {
       // Enforce that the animated splash screen remains for at least 2000ms
       const elapsed = Date.now() - startTime;
@@ -259,8 +302,9 @@ export default function App() {
             <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748B', marginTop: 4, letterSpacing: 0.8, textTransform: 'uppercase' }}>Production Ledger</Text>
           </Animated.View>
           
-          <View style={{ position: 'absolute', bottom: 64 }}>
-            <ActivityIndicator size="large" color="#0284C7" />
+          <View style={{ position: 'absolute', bottom: 48, alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#0284C7" style={{ marginBottom: 14 }} />
+            <Text style={{ fontSize: 11, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.8 }}>VERSION {packageJson.version}</Text>
           </View>
         </Animated.View>
       </View>

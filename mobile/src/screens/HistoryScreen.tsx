@@ -29,6 +29,7 @@ import * as Sharing from 'expo-sharing';
 import { dbService } from '../services/dbService';
 import { COLORS } from '../utils/theme';
 import type { ProductionEntry, Rate } from '../types';
+import { formatDateToDDMMYYYY } from '../utils/dateFormatter';
 
 const parseDateString = (dateStr: string): Date => {
   if (!dateStr) return new Date();
@@ -201,6 +202,7 @@ export const HistoryScreen = ({ navigation }: { navigation: any }) => {
     try {
       let totalFallsVal = 0;
       let totalIncomeVal = 0;
+      let lastPrintedDate = '';
       
       const rowsHtml = entries.map((e, index) => {
         const rate = resolveRateForDate(e.entry_date);
@@ -208,9 +210,12 @@ export const HistoryScreen = ({ navigation }: { navigation: any }) => {
         totalFallsVal += e.quantity;
         totalIncomeVal += income;
 
+        const dateToPrint = e.entry_date === lastPrintedDate ? '' : formatDateToDDMMYYYY(e.entry_date);
+        lastPrintedDate = e.entry_date;
+
         return `
           <tr style="background-color: ${index % 2 === 1 ? '#F8FAFC' : '#FFFFFF'};">
-            <td style="padding: 10px; border-bottom: 1px solid #E2E8F0; font-size: 12px; color: #334155;">${e.entry_date}</td>
+            <td style="padding: 10px; border-bottom: 1px solid #E2E8F0; font-size: 12px; color: #334155;">${dateToPrint}</td>
             <td style="padding: 10px; border-bottom: 1px solid #E2E8F0; font-size: 13px; color: #1E293B; font-weight: bold;">${e.color?.name || 'Unspecified'}</td>
             <td style="padding: 10px; border-bottom: 1px solid #E2E8F0; font-size: 12px; color: #334155; text-align: right;">${e.quantity}</td>
             <td style="padding: 10px; border-bottom: 1px solid #E2E8F0; font-size: 12px; color: #334155; text-align: right;">₹${rate.toFixed(2)}</td>
@@ -333,10 +338,10 @@ export const HistoryScreen = ({ navigation }: { navigation: any }) => {
             >
               <Calendar size={15} color={COLORS.textMuted} style={{ marginRight: 6 }} />
               <TextInput
-                value={startDate}
+                value={formatDateToDDMMYYYY(startDate)}
                 editable={false}
                 pointerEvents="none"
-                placeholder="Start: YYYY-MM-DD"
+                placeholder="Start: DD-MM-YYYY"
                 style={styles.filterInput}
               />
             </TouchableOpacity>
@@ -347,10 +352,10 @@ export const HistoryScreen = ({ navigation }: { navigation: any }) => {
             >
               <Calendar size={15} color={COLORS.textMuted} style={{ marginRight: 6 }} />
               <TextInput
-                value={endDate}
+                value={formatDateToDDMMYYYY(endDate)}
                 editable={false}
                 pointerEvents="none"
-                placeholder="End: YYYY-MM-DD"
+                placeholder="End: DD-MM-YYYY"
                 style={styles.filterInput}
               />
             </TouchableOpacity>
@@ -387,7 +392,7 @@ export const HistoryScreen = ({ navigation }: { navigation: any }) => {
               <View style={styles.groupHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                   <Calendar size={15} color={COLORS.primary} style={{ marginRight: 6 }} />
-                  <Text style={styles.groupDate}>{item.date}</Text>
+                  <Text style={styles.groupDate}>{formatDateToDDMMYYYY(item.date)}</Text>
                   <TouchableOpacity 
                     style={{ marginLeft: 8, padding: 4 }}
                     onPress={() => handleCopyGroup(item.date, item.data)}
@@ -405,6 +410,10 @@ export const HistoryScreen = ({ navigation }: { navigation: any }) => {
                {/* Group Entries */}
               <View style={styles.groupItems}>
                 {item.data.map((entry) => {
+                  const todayObj = new Date();
+                  const todayStr = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, '0')}-${String(todayObj.getDate()).padStart(2, '0')}`;
+                  const isToday = item.date === todayStr;
+
                   return (
                     <View key={entry.id} style={styles.entryRow}>
                       <View>
@@ -414,12 +423,14 @@ export const HistoryScreen = ({ navigation }: { navigation: any }) => {
                         <View style={styles.qtyBadge}>
                           <Text style={styles.qtyText}>{entry.quantity} Falls</Text>
                         </View>
-                        <TouchableOpacity 
-                          style={styles.deleteLogBtn}
-                          onPress={() => handleDelete(entry.id)}
-                        >
-                          <Trash2 size={16} color={COLORS.danger} />
-                        </TouchableOpacity>
+                        {isToday && (
+                          <TouchableOpacity 
+                            style={styles.deleteLogBtn}
+                            onPress={() => handleDelete(entry.id)}
+                          >
+                            <Trash2 size={16} color={COLORS.danger} />
+                          </TouchableOpacity>
+                        )}
                       </View>
                     </View>
                   );

@@ -38,6 +38,7 @@ import { isSupabaseConfigured } from '../lib/supabase';
 import { COLORS } from '../utils/theme';
 import { exportEntriesToPDFMobile, saveEntriesToPDFMobile, exportEntriesToCSVMobile } from '../utils/reportExport';
 import { matchColor } from '../utils/transliterate';
+import { formatDateToDDMMYYYY } from '../utils/dateFormatter';
 
 export const SettingsScreen = ({ navigation, onLogout, userEmail }: { navigation: any; onLogout: () => void; userEmail: string }) => {
   const insets = useSafeAreaInsets();
@@ -1195,7 +1196,7 @@ export const SettingsScreen = ({ navigation, onLogout, userEmail }: { navigation
                   <View style={styles.colorItemCard}>
                     <View style={styles.colorCardRow}>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.colorNameLabel}>{item.entry_date} &bull; {item.color?.name || 'Unspecified'}</Text>
+                        <Text style={styles.colorNameLabel}>{formatDateToDDMMYYYY(item.entry_date)} &bull; {item.color?.name || 'Unspecified'}</Text>
                         <Text style={styles.colorUsageLabel}>
                           {item.quantity} Falls logged
                         </Text>

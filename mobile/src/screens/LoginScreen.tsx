@@ -84,6 +84,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
           if (data.user) {
             showToast('Account created successfully!', 'success');
+
+            // Cache user in localUsers for offline access fallback!
+            const localUsersData = await AsyncStorage.getItem('falltrack_local_users');
+            const localUsers: any[] = localUsersData ? JSON.parse(localUsersData) : [];
+            const userExists = localUsers.some(u => u.id === data.user!.id);
+            if (!userExists) {
+              localUsers.push({ id: data.user.id, email: data.user.email || '' });
+              await AsyncStorage.setItem('falltrack_local_users', JSON.stringify(localUsers));
+            }
+
             await AsyncStorage.setItem('falltrack_active_user_id', data.user.id);
             await migrateLocalDefaultToUserMobile(data.user.id);
             await syncLocalDataToCloudMobile(data.user.id);
@@ -102,6 +112,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
           if (data.user) {
             showToast('Welcome back!', 'success');
+
+            // Cache user in localUsers for offline access fallback!
+            const localUsersData = await AsyncStorage.getItem('falltrack_local_users');
+            const localUsers: any[] = localUsersData ? JSON.parse(localUsersData) : [];
+            const userExists = localUsers.some(u => u.id === data.user!.id);
+            if (!userExists) {
+              localUsers.push({ id: data.user.id, email: data.user.email || '' });
+              await AsyncStorage.setItem('falltrack_local_users', JSON.stringify(localUsers));
+            }
+
             await AsyncStorage.setItem('falltrack_active_user_id', data.user.id);
             await migrateLocalDefaultToUserMobile(data.user.id);
             await syncLocalDataToCloudMobile(data.user.id);

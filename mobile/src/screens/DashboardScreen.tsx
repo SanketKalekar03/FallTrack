@@ -20,6 +20,7 @@ import {
 import { dbService } from '../services/dbService';
 import { COLORS } from '../utils/theme';
 import type { ProductionEntry, Rate } from '../types';
+import { formatDateToDDMMYYYY } from '../utils/dateFormatter';
 
 export const DashboardScreen = ({ navigation }: { navigation: any }) => {
   const insets = useSafeAreaInsets();
@@ -256,7 +257,7 @@ export const DashboardScreen = ({ navigation }: { navigation: any }) => {
                 <View key={group.date} style={styles.recentGroupCard}>
                   {/* Group Header */}
                   <View style={styles.recentGroupHeader}>
-                    <Text style={styles.recentGroupDate}>{group.date}</Text>
+                    <Text style={styles.recentGroupDate}>{formatDateToDDMMYYYY(group.date)}</Text>
                     <View style={styles.recentGroupBadge}>
                       <Text style={styles.recentGroupBadgeText}>{group.totalQty} Falls</Text>
                     </View>

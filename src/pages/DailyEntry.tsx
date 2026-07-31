@@ -29,7 +29,7 @@ export const DailyEntry: React.FC = () => {
   const { entries, fetchEntries, saveEntries } = useProductionStore();
   const { getActiveRateForDate, fetchRates } = useRateStore();
 
-  const [entryDate, setEntryDate] = useState<string>(() => {
+  const [entryDate] = useState<string>(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
@@ -200,13 +200,13 @@ export const DailyEntry: React.FC = () => {
         </div>
         
         <div className="flex flex-col gap-1 w-full sm:w-auto">
-          <label className="text-[9px] font-extrabold text-slate-455 uppercase tracking-wider">Entry Date</label>
+          <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Entry Date (Locked)</label>
           <div className="relative">
             <input
               type="date"
               value={entryDate}
-              onChange={(e) => setEntryDate(e.target.value)}
-              className="px-3 py-1.5 pl-8 bg-white border border-slate-200 focus:border-brand-primary focus:ring-3 focus:ring-brand-primary/10 rounded-lg text-xs font-semibold outline-none text-slate-700 shadow-sm transition-all"
+              disabled
+              className="px-3 py-1.5 pl-8 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold outline-none text-slate-405 shadow-sm transition-all cursor-not-allowed"
             />
             <Calendar size={13} className="absolute left-2.5 top-2 text-slate-400" />
           </div>
