@@ -74,6 +74,7 @@ export const DailyEntryScreen = ({ navigation }: { navigation: any }) => {
   const [activeRowKey, setActiveRowKey] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredColors, setFilteredColors] = useState<Color[]>([]);
+  const [recentColors, setRecentColors] = useState<Color[]>([]);
 
   useEffect(() => {
     loadColors();
@@ -89,8 +90,28 @@ export const DailyEntryScreen = ({ navigation }: { navigation: any }) => {
       const fetchedColors = await dbService.getColors();
       setColors(fetchedColors);
       setFilteredColors(fetchedColors);
+
+      // Load recently used colors from production logs
+      const recentEntries = await dbService.getProductionEntries();
+      const uniqueRecents: Color[] = [];
+      const seenIds = new Set<string>();
+
+      for (const entry of recentEntries) {
+        if (entry.color && !seenIds.has(entry.color.id)) {
+          seenIds.add(entry.color.id);
+          uniqueRecents.push(entry.color);
+          if (uniqueRecents.length >= 10) break; // Limit to top 10 most recent colors
+        }
+      }
+
+      // Fallback: If no recent entries, show the first 10 default colors
+      if (uniqueRecents.length === 0) {
+        setRecentColors(fetchedColors.slice(0, 10));
+      } else {
+        setRecentColors(uniqueRecents);
+      }
     } catch (err) {
-      console.warn('Load colors error:', err);
+      console.warn('Load colors and recents error:', err);
     }
   };
 
@@ -188,9 +209,8 @@ export const DailyEntryScreen = ({ navigation }: { navigation: any }) => {
     try {
       const newColor = await dbService.createColor(query);
       
-      // Reload local color catalog
-      const updatedColors = await dbService.getColors();
-      setColors(updatedColors);
+      // Reload local color catalog and recents list
+      await loadColors();
 
       // Select newly created color
       selectColor(newColor);
@@ -442,12 +462,12 @@ export const DailyEntryScreen = ({ navigation }: { navigation: any }) => {
               />
             </View>
 
-            {/* Quick Select Colors */}
-            {!searchQuery.trim() && colors.length > 0 && (
+            {/* Recent Colors */}
+            {!searchQuery.trim() && recentColors.length > 0 && (
               <View style={styles.quickSelectSection}>
-                <Text style={styles.quickSelectTitle}>Quick Select</Text>
+                <Text style={styles.quickSelectTitle}>Recent Colors</Text>
                 <View style={styles.quickSelectGrid}>
-                  {colors.slice(0, 12).map((item) => (
+                  {recentColors.map((item) => (
                     <TouchableOpacity
                       key={item.id}
                       style={styles.quickColorPill}
