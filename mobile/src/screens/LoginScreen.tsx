@@ -88,11 +88,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             // Cache user in localUsers for offline access fallback!
             const localUsersData = await AsyncStorage.getItem('falltrack_local_users');
             const localUsers: any[] = localUsersData ? JSON.parse(localUsersData) : [];
-            const userExists = localUsers.some(u => u.id === data.user!.id);
-            if (!userExists) {
-              localUsers.push({ id: data.user.id, email: data.user.email || '' });
-              await AsyncStorage.setItem('falltrack_local_users', JSON.stringify(localUsers));
+            const userIndex = localUsers.findIndex(u => u.id === data.user!.id);
+            const hashed = hashPassword(password);
+            if (userIndex === -1) {
+              localUsers.push({ id: data.user.id, email: data.user.email || '', passwordHash: hashed });
+            } else {
+              localUsers[userIndex].passwordHash = hashed;
+              localUsers[userIndex].email = data.user.email || '';
             }
+            await AsyncStorage.setItem('falltrack_local_users', JSON.stringify(localUsers));
 
             await AsyncStorage.setItem('falltrack_active_user_id', data.user.id);
             await migrateLocalDefaultToUserMobile(data.user.id);
@@ -103,29 +107,64 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             setIsSignUp(false);
           }
         } else {
-          const { data, error } = await supabase.auth.signInWithPassword({
-            email: cleanEmail,
-            password
-          });
+          try {
+            const { data, error } = await supabase.auth.signInWithPassword({
+              email: cleanEmail,
+              password
+            });
 
-          if (error) throw error;
+            if (error) throw error;
 
-          if (data.user) {
-            showToast('Welcome back!', 'success');
+            if (data.user) {
+              showToast('Welcome back!', 'success');
 
-            // Cache user in localUsers for offline access fallback!
-            const localUsersData = await AsyncStorage.getItem('falltrack_local_users');
-            const localUsers: any[] = localUsersData ? JSON.parse(localUsersData) : [];
-            const userExists = localUsers.some(u => u.id === data.user!.id);
-            if (!userExists) {
-              localUsers.push({ id: data.user.id, email: data.user.email || '' });
+              // Cache user in localUsers for offline access fallback!
+              const localUsersData = await AsyncStorage.getItem('falltrack_local_users');
+              const localUsers: any[] = localUsersData ? JSON.parse(localUsersData) : [];
+              const userIndex = localUsers.findIndex(u => u.id === data.user!.id);
+              const hashed = hashPassword(password);
+              if (userIndex === -1) {
+                localUsers.push({ id: data.user.id, email: data.user.email || '', passwordHash: hashed });
+              } else {
+                localUsers[userIndex].passwordHash = hashed;
+                localUsers[userIndex].email = data.user.email || '';
+              }
               await AsyncStorage.setItem('falltrack_local_users', JSON.stringify(localUsers));
+
+              await AsyncStorage.setItem('falltrack_active_user_id', data.user.id);
+              await migrateLocalDefaultToUserMobile(data.user.id);
+              await syncLocalDataToCloudMobile(data.user.id);
+              onLoginSuccess({ id: data.user.id, email: data.user.email || '' });
+            }
+          } catch (err: any) {
+            // Check if network failed or internet is unreachable
+            const isNetworkError = 
+              err.message?.toLowerCase().includes('network') || 
+              err.message?.toLowerCase().includes('fetch') ||
+              err.message?.toLowerCase().includes('typeerror');
+
+            if (isNetworkError) {
+              console.log('Online login failed due to network error, checking local fallback...');
+              const localUsersData = await AsyncStorage.getItem('falltrack_local_users');
+              const localUsers: any[] = localUsersData ? JSON.parse(localUsersData) : [];
+              
+              const matchedUser = localUsers.find(
+                u => u.email.toLowerCase() === cleanEmail.toLowerCase() && u.passwordHash === hashPassword(password)
+              );
+
+              if (matchedUser) {
+                await AsyncStorage.setItem('falltrack_active_user_id', matchedUser.id);
+                await migrateLocalDefaultToUserMobile(matchedUser.id);
+                showToast('Welcome back (Offline fallback)!', 'success');
+                onLoginSuccess({ id: matchedUser.id, email: matchedUser.email });
+                return;
+              }
+
+              // Helpful instructions for first-time login network errors
+              throw new Error('Network request failed. If this is your first time logging into this device, please connect to a stable internet connection first. If you have signed in here before, double check your email and password.');
             }
 
-            await AsyncStorage.setItem('falltrack_active_user_id', data.user.id);
-            await migrateLocalDefaultToUserMobile(data.user.id);
-            await syncLocalDataToCloudMobile(data.user.id);
-            onLoginSuccess({ id: data.user.id, email: data.user.email || '' });
+            throw err;
           }
         }
       } catch (err: any) {

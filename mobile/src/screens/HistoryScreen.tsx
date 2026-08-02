@@ -59,23 +59,31 @@ export const HistoryScreen = ({ navigation }: { navigation: any }) => {
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      loadHistoryData();
+      // 1. Load local cache instantly to show layout immediately
+      loadHistoryData(true).then(() => {
+        // 2. Perform online sync update in the background silently
+        loadHistoryData(false);
+      });
     });
     return unsubscribe;
   }, [navigation]);
 
-  const loadHistoryData = async () => {
-    setLoading(true);
+  const loadHistoryData = async (forceLocal = false) => {
+    if (forceLocal) {
+      setLoading(true);
+    }
     try {
-      const fetchedRates = await dbService.getRates();
+      const fetchedRates = await dbService.getRates(forceLocal);
       setRates(fetchedRates);
 
-      const fetchedEntries = await dbService.getProductionEntries();
+      const fetchedEntries = await dbService.getProductionEntries(undefined, forceLocal);
       setEntries(fetchedEntries);
     } catch (err) {
       console.warn('History data load error:', err);
     } finally {
-      setLoading(false);
+      if (forceLocal) {
+        setLoading(false);
+      }
     }
   };
 

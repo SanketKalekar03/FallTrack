@@ -94,7 +94,7 @@ export const exportEntriesToPDF = (
   doc.setFont('Helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(224, 242, 254); // #E0F2FE (Very light sky blue)
-  doc.text(`Manager: ${managerName}  |  Phone: ${managerPhone}`, 196, 16, { align: 'right' });
+  doc.text(`Name: ${managerName}  |  Phone: ${managerPhone}`, 196, 16, { align: 'right' });
   doc.text(`Generated: ${new Date().toLocaleDateString('en-IN')} ${new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true })}`, 196, 21, { align: 'right' });
 
   // --- 2. REPORT METADATA SECTION ---
@@ -103,14 +103,50 @@ export const exportEntriesToPDF = (
   doc.setTextColor(30, 41, 59); // #1E293B (Dark Slate)
   doc.text('REPORT METADATA', 14, 35);
 
+  // Center current income month (like July-2026) below orange line
+  const getMonthYearStr = (entriesList: ProductionEntry[]): string => {
+    if (entriesList.length === 0) {
+      const today = new Date();
+      const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      return `${months[today.getMonth()]}-${today.getFullYear()}`;
+    }
+    const sorted = [...entriesList].sort((a, b) => b.entry_date.localeCompare(a.entry_date));
+    const latestDate = sorted[0].entry_date;
+    const parts = latestDate.split('-');
+    if (parts.length === 3) {
+      const monthIdx = parseInt(parts[1], 10) - 1;
+      const year = parts[0];
+      const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      return `${months[monthIdx]}-${year}`;
+    }
+    return '';
+  };
+  const currentMonthStr = getMonthYearStr(entries);
+  doc.text(currentMonthStr, 105, 35, { align: 'center' });
+
   // Metadata grid values
   doc.setFont('Helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(100, 116, 139); // #64748B (Slate Gray)
   
   // Left Column
-  const dateRange = titleText.match(/\(([^)]+)\)/)?.[1] || `${new Date().toLocaleDateString('en-IN')}`;
-  doc.text(`Cycle Range: ${dateRange}`, 14, 41);
+  const formatDateToSlash = (dateStr: string): string => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length === 3 && parts[0].length === 4) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return dateStr.replace(/-/g, '/');
+  };
+
+  let dateRange = '';
+  if (entries.length > 0) {
+    const dates = entries.map(e => e.entry_date).sort();
+    dateRange = `${formatDateToSlash(dates[0])} to ${formatDateToSlash(dates[dates.length - 1])}`;
+  } else {
+    dateRange = `${formatDateToSlash(new Date().toISOString().split('T')[0])}`;
+  }
+  doc.text(dateRange, 14, 41);
   
   const uniqueRates = Array.from(new Set(entries.map(e => getActiveRateForDate(e.entry_date))));
   const rateText = uniqueRates.length === 1 

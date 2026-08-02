@@ -38,29 +38,35 @@ export const DashboardScreen = ({ navigation }: { navigation: any }) => {
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      loadDashboardData();
+      // 1. Load local cache instantly to show layout immediately
+      loadDashboardData(true).then(() => {
+        // 2. Perform online sync update in the background silently
+        loadDashboardData(false);
+      });
     });
     return unsubscribe;
   }, [navigation]);
 
-  const loadDashboardData = async () => {
-    setLoading(true);
+  const loadDashboardData = async (forceLocal = false) => {
+    if (forceLocal) {
+      setLoading(true);
+    }
     try {
       // 1. Load Profile
-      const profile = await dbService.getProfile();
+      const profile = await dbService.getProfile(forceLocal);
       setAppName(profile.app_name);
       setManagerName(profile.manager_name);
 
       // 2. Load Rates & Resolve Current active rate
-      const rates = await dbService.getRates();
+      const rates = await dbService.getRates(forceLocal);
       const todayObj = new Date();
       const todayStr = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, '0')}-${String(todayObj.getDate()).padStart(2, '0')}`;
       const activeRate = resolveRateForDate(rates, todayStr);
       setCurrentRate(activeRate);
 
       // 3. Load Entries and Custom Income Periods
-      const allEntries = await dbService.getProductionEntries();
-      const periods = await dbService.getIncomePeriods();
+      const allEntries = await dbService.getProductionEntries(undefined, forceLocal);
+      const periods = await dbService.getIncomePeriods(forceLocal);
 
       // Today's total
       const todayEntries = allEntries.filter(e => e.entry_date === todayStr);
@@ -98,7 +104,9 @@ export const DashboardScreen = ({ navigation }: { navigation: any }) => {
     } catch (err) {
       console.warn('Dashboard load error:', err);
     } finally {
-      setLoading(false);
+      if (forceLocal) {
+        setLoading(false);
+      }
     }
   };
 
@@ -192,7 +200,7 @@ export const DashboardScreen = ({ navigation }: { navigation: any }) => {
                
                <View style={styles.cardHeaderRow}>
                  <View style={styles.cardTextContent}>
-                   <Text style={styles.statLabel}>Cycle Production</Text>
+                   <Text style={styles.statLabel}>Total Monthly Falls</Text>
                    <Text style={styles.statValue}>{monthlyFalls.toLocaleString()}</Text>
                  </View>
                  <View style={[styles.iconWrapper, { backgroundColor: 'rgba(245, 158, 11, 0.08)' }]}>
@@ -207,7 +215,7 @@ export const DashboardScreen = ({ navigation }: { navigation: any }) => {
                
                <View style={styles.cardHeaderRow}>
                  <View style={styles.cardTextContent}>
-                   <Text style={styles.statLabel}>Est. Cycle Income</Text>
+                   <Text style={styles.statLabel}>Est. Monthly Income</Text>
                    <Text style={styles.statValue}>₹{Math.round(estMonthlyIncome).toLocaleString()}</Text>
                  </View>
                  <View style={[styles.iconWrapper, { backgroundColor: 'rgba(139, 92, 246, 0.08)' }]}>

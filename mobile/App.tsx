@@ -302,7 +302,7 @@ export default function App() {
             <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748B', marginTop: 4, letterSpacing: 0.8, textTransform: 'uppercase' }}>Production Ledger</Text>
           </Animated.View>
           
-          <View style={{ position: 'absolute', bottom: 48, alignItems: 'center' }}>
+          <View style={{ position: 'absolute', bottom: 80, alignItems: 'center' }}>
             <ActivityIndicator size="large" color="#0284C7" style={{ marginBottom: 14 }} />
             <Text style={{ fontSize: 11, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.8 }}>VERSION {packageJson.version}</Text>
           </View>

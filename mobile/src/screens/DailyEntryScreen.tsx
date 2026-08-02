@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -9,7 +9,8 @@ import {
   Modal, 
   FlatList, 
   ActivityIndicator,
-  Platform
+  Platform,
+  KeyboardAvoidingView
 } from 'react-native';
 import { useAlert } from '../components/AlertProvider';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -53,6 +54,7 @@ const parseDateString = (dateStr: string): Date => {
 
 export const DailyEntryScreen = ({ navigation }: { navigation: any }) => {
   const insets = useSafeAreaInsets();
+  const scrollViewRef = useRef<ScrollView>(null);
   const { showToast, showAlert, showConfirm } = useAlert();
   const [loading, setLoading] = useState(false);
   const [colors, setColors] = useState<Color[]>([]);
@@ -78,7 +80,11 @@ export const DailyEntryScreen = ({ navigation }: { navigation: any }) => {
   const [recentColors, setRecentColors] = useState<Color[]>([]);
 
   useEffect(() => {
-    loadColors();
+    // 1. Load local cache instantly to show data immediately
+    loadColors(true).then(() => {
+      // 2. Perform online sync update in the background silently
+      loadColors(false);
+    });
     loadDraft();
   }, []);
 
@@ -86,14 +92,14 @@ export const DailyEntryScreen = ({ navigation }: { navigation: any }) => {
     saveDraft();
   }, [rows, entryDate]);
 
-  const loadColors = async () => {
+  const loadColors = async (forceLocal = false) => {
     try {
-      const fetchedColors = await dbService.getColors();
+      const fetchedColors = await dbService.getColors(forceLocal);
       setColors(fetchedColors);
       setFilteredColors(fetchedColors);
 
       // Load recently used colors from production logs
-      const recentEntries = await dbService.getProductionEntries();
+      const recentEntries = await dbService.getProductionEntries(undefined, forceLocal);
       const uniqueRecents: Color[] = [];
       const seenIds = new Set<string>();
 
@@ -149,6 +155,10 @@ export const DailyEntryScreen = ({ navigation }: { navigation: any }) => {
       ...prev,
       { key: newKey, colorId: '', colorName: '', quantityStr: '0' }
     ]);
+    // Auto-scroll to the bottom after adding a row
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 150);
   };
 
   const handleRemoveRow = (key: string) => {
@@ -319,7 +329,12 @@ export const DailyEntryScreen = ({ navigation }: { navigation: any }) => {
   }, 0);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <KeyboardAvoidingView 
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
+      <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Date selector header */}
       <View style={styles.dateHeader}>
         <View style={styles.dateHeaderLeft}>
@@ -341,7 +356,11 @@ export const DailyEntryScreen = ({ navigation }: { navigation: any }) => {
       </View>
 
       {/* Entry Rows List */}
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <ScrollView 
+        ref={scrollViewRef}
+        contentContainerStyle={styles.scrollContent} 
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={styles.sectionTitle}>Entry Rows ({rows.length})</Text>
         
         {rows.map((row, index) => (
@@ -381,6 +400,11 @@ export const DailyEntryScreen = ({ navigation }: { navigation: any }) => {
                 if (row.quantityStr === '') {
                   handleQuantityChange(row.key, '0');
                 }
+              }}
+              onFocus={() => {
+                setTimeout(() => {
+                  scrollViewRef.current?.scrollToEnd({ animated: true });
+                }, 150);
               }}
               style={styles.quantityInput}
             />
@@ -579,6 +603,7 @@ export const DailyEntryScreen = ({ navigation }: { navigation: any }) => {
         )
       )}
     </View>
+  </KeyboardAvoidingView>
   );
 };
 

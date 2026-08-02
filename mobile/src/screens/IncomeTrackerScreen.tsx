@@ -65,24 +65,30 @@ export const IncomeTrackerScreen = ({ navigation }: { navigation: any }) => {
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      loadTrackerData();
+      // 1. Load local cache instantly to show layout immediately
+      loadTrackerData(true).then(() => {
+        // 2. Perform online sync update in the background silently
+        loadTrackerData(false);
+      });
     });
     return unsubscribe;
   }, [navigation]);
 
-  const loadTrackerData = async () => {
-    setLoading(true);
+  const loadTrackerData = async (forceLocal = false) => {
+    if (forceLocal) {
+      setLoading(true);
+    }
     try {
-      const fetchedRates = await dbService.getRates();
+      const fetchedRates = await dbService.getRates(forceLocal);
       setRates(fetchedRates);
 
-      const fetchedPeriods = await dbService.getIncomePeriods();
+      const fetchedPeriods = await dbService.getIncomePeriods(forceLocal);
       const sortedPeriods = fetchedPeriods.sort(
         (a, b) => b.end_date.localeCompare(a.end_date)
       );
       setPeriods(sortedPeriods);
 
-      const allEntries = await dbService.getProductionEntries();
+      const allEntries = await dbService.getProductionEntries(undefined, forceLocal);
       setEntries(allEntries);
 
       // Determine next start date
@@ -114,7 +120,9 @@ export const IncomeTrackerScreen = ({ navigation }: { navigation: any }) => {
     } catch (err) {
       console.warn('Tracker data load error:', err);
     } finally {
-      setLoading(false);
+      if (forceLocal) {
+        setLoading(false);
+      }
     }
   };
 

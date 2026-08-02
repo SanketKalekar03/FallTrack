@@ -298,8 +298,8 @@ export const dbService = {
   // ==========================================
   // Colors API
   // ==========================================
-  async getColors(): Promise<Color[]> {
-    if (isSupabaseConfigured && supabase) {
+  async getColors(forceLocal?: boolean): Promise<Color[]> {
+    if (!forceLocal && isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await withTimeout(
           supabase
@@ -584,8 +584,8 @@ export const dbService = {
   // ==========================================
   // Rates API
   // ==========================================
-  async getRates(): Promise<Rate[]> {
-    if (isSupabaseConfigured && supabase) {
+  async getRates(forceLocal?: boolean): Promise<Rate[]> {
+    if (!forceLocal && isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await withTimeout(
           supabase
@@ -678,11 +678,11 @@ export const dbService = {
     month?: string; // YYYY-MM
     year?: string;  // YYYY
     search?: string; // color name
-  }): Promise<ProductionEntry[]> {
+  }, forceLocal?: boolean): Promise<ProductionEntry[]> {
     let result: ProductionEntry[] = [];
     let fetchedFromCloud = false;
 
-    if (isSupabaseConfigured && supabase) {
+    if (!forceLocal && isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await withTimeout(
           supabase
@@ -908,8 +908,8 @@ export const dbService = {
   },
 
   // Profile Settings API
-  async getProfile(): Promise<{ app_name: string; manager_name: string; manager_phone: string }> {
-    if (isSupabaseConfigured && supabase) {
+  async getProfile(forceLocal?: boolean): Promise<{ app_name: string; manager_name: string; manager_phone: string }> {
+    if (!forceLocal && isSupabaseConfigured && supabase) {
       try {
         const { data: { user } } = await withTimeout(supabase.auth.getUser());
         if (user) {
@@ -993,8 +993,8 @@ export const dbService = {
   },
 
   // Custom Income Periods API
-  async getIncomePeriods(): Promise<IncomePeriod[]> {
-    if (isSupabaseConfigured && supabase) {
+  async getIncomePeriods(forceLocal?: boolean): Promise<IncomePeriod[]> {
+    if (!forceLocal && isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await withTimeout(
           supabase

@@ -10,6 +10,43 @@ const generateHTMLReportContent = (
   title: string,
   profile: { app_name: string; manager_name: string; manager_phone: string }
 ): string => {
+  const formatDateToSlash = (dateStr: string): string => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length === 3 && parts[0].length === 4) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return dateStr.replace(/-/g, '/');
+  };
+
+  const getMonthYearStr = (entriesList: ProductionEntry[]): string => {
+    if (entriesList.length === 0) {
+      const today = new Date();
+      const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      return `${months[today.getMonth()]}-${today.getFullYear()}`;
+    }
+    const sorted = [...entriesList].sort((a, b) => b.entry_date.localeCompare(a.entry_date));
+    const latestDate = sorted[0].entry_date;
+    const parts = latestDate.split('-');
+    if (parts.length === 3) {
+      const monthIdx = parseInt(parts[1], 10) - 1;
+      const year = parts[0];
+      const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      return `${months[monthIdx]}-${year}`;
+    }
+    return '';
+  };
+
+  const currentMonthStr = getMonthYearStr(entries);
+
+  let dateRange = '';
+  if (entries.length > 0) {
+    const dates = entries.map(e => e.entry_date).sort();
+    dateRange = `${formatDateToSlash(dates[0])} to ${formatDateToSlash(dates[dates.length - 1])}`;
+  } else {
+    dateRange = `${formatDateToSlash(new Date().toISOString().split('T')[0])}`;
+  }
+
   const getActiveRateForDate = (dateStr: string): number => {
     const sortedRates = [...rates].sort((a, b) => b.effective_from.localeCompare(a.effective_from));
     const matched = sortedRates.find(r => dateStr >= r.effective_from);
@@ -173,7 +210,7 @@ const generateHTMLReportContent = (
             </div>
             <div class="header-right">
               <h2>PRODUCTION REPORT</h2>
-              <p>Manager: ${profile.manager_name} &bull; Phone: ${profile.manager_phone}</p>
+              <p>Name: ${profile.manager_name} &bull; Phone: ${profile.manager_phone}</p>
               <p style="font-size: 9px; opacity: 0.85; margin: 4px 0 0 0;">Generated: ${new Date().toLocaleDateString('en-IN')} ${new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true })}</p>
             </div>
           </div>
@@ -181,10 +218,14 @@ const generateHTMLReportContent = (
 
         <div class="content">
           <div class="report-metadata">
-            <h3 class="report-metadata-title">REPORT METADATA</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; position: relative;">
+              <h3 class="report-metadata-title" style="margin: 0;">REPORT METADATA</h3>
+              <div style="position: absolute; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 800; color: #1E293B; letter-spacing: 0.5px;">${currentMonthStr}</div>
+              <div style="width: 100px;"></div>
+            </div>
             <div class="metadata-flex">
               <div class="metadata-col">
-                <div>Cycle Range: ${title.replace(/^FallTrack\s+/i, '')}</div>
+                <div>${dateRange}</div>
                 <div>Rate Card: Rs. ${rateText} per Dozen</div>
               </div>
               <div class="metadata-col" style="text-align: right;">
