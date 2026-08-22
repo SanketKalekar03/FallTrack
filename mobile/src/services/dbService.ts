@@ -202,15 +202,23 @@ export const syncLocalDataToCloudMobile = async (userId: string) => {
 // Helper to get active user ID
 export const getActiveUserId = async (): Promise<string> => {
   await migrateLegacyLocalKeysMobile();
+  // Read from AsyncStorage locally for instantaneous, offline-ready retrieval
+  const cachedUserId = await AsyncStorage.getItem('falltrack_active_user_id');
+  if (cachedUserId) return cachedUserId;
+
   if (isSupabaseConfigured && supabase) {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) return user.id;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const uid = session.user.id;
+        await AsyncStorage.setItem('falltrack_active_user_id', uid);
+        return uid;
+      }
     } catch (e) {
       // Ignore auth error
     }
   }
-  return (await AsyncStorage.getItem('falltrack_active_user_id')) || 'local-default';
+  return 'local-default';
 };
 
 // Initial local seeds
@@ -806,7 +814,7 @@ export const dbService = {
           synced: true
         }));
 
-        // Merge cache: Keep local unsynced, append online created
+        // Merge cache: Keep all existing entries and append the new ones safely (with deduplication)
         const local = await getLocalEntries();
         const cleanReturned = returned.map(e => ({
           id: e.id,
@@ -816,7 +824,15 @@ export const dbService = {
           created_at: e.created_at,
           synced: true
         }));
-        const merged = [...local.filter((e: any) => e.synced === false), ...cleanReturned];
+        
+        const seenIds = new Set<string>();
+        const merged: any[] = [];
+        for (const item of [...local, ...cleanReturned]) {
+          if (!seenIds.has(item.id)) {
+            seenIds.add(item.id);
+            merged.push(item);
+          }
+        }
         await saveLocalEntries(merged);
 
         return returned;
@@ -860,6 +876,20 @@ export const dbService = {
         .select('*, color:colors(*)')
         .single();
       if (error) throw error;
+      // Update the local cache immediately with edited values to keep totals perfectly aligned
+      const local = await getLocalEntries();
+      const idx = local.findIndex(e => e.id === id);
+      if (idx !== -1) {
+        local[idx] = {
+          ...local[idx],
+          entry_date: data.entry_date,
+          color_id: data.color_id,
+          quantity: data.quantity,
+          synced: true
+        } as any;
+        await saveLocalEntries(local);
+      }
+
       return {
         id: data.id,
         entry_date: data.entry_date,

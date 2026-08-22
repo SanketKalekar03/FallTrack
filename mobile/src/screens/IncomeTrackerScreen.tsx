@@ -126,19 +126,24 @@ export const IncomeTrackerScreen = ({ navigation }: { navigation: any }) => {
     }
   };
 
-  // Auto-generate name based on end date
+  // Auto-generate name based on start date
   useEffect(() => {
-    if (endDate) {
-      const dateObj = new Date(endDate);
-      const monthNames = [
-        'January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December'
-      ];
-      const monthName = monthNames[dateObj.getMonth()];
-      const year = dateObj.getFullYear();
-      setPeriodName(`${monthName} ${year}`);
+    if (startDate) {
+      const parts = startDate.split('-');
+      if (parts.length === 3) {
+        const year = parseInt(parts[0], 10);
+        const monthIdx = parseInt(parts[1], 10) - 1;
+        const monthNames = [
+          'January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        if (monthIdx >= 0 && monthIdx < 12) {
+          const monthName = monthNames[monthIdx];
+          setPeriodName(`${monthName} ${year}`);
+        }
+      }
     }
-  }, [endDate]);
+  }, [startDate]);
 
   // Live Calculations
   const filteredEntries = entries.filter(

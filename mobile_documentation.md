@@ -40,7 +40,7 @@ Designed to operate in areas with poor cellular coverage, the application utiliz
 
 ### 🚀 Step 1: Boot & Custom Splash Screen
 1. When launched, the app mounts the animated splash screen in [App.tsx](file:///d:/FallTrack/mobile/App.tsx).
-2. The splash screen fades in and scales the logo, displaying an active loading indicator and the build version (e.g., `VERSION 1.0.5`).
+2. The splash screen fades in and scales the logo, displaying an active loading indicator and the build version (e.g., `VERSION 1.0.6`).
 3. **Safety Margin**: The version label is styled with `bottom: 80` to sit comfortably above Android's physical or virtual navigation buttons.
 4. During this animation, the app queries the local storage auth session. If a valid session exists, it routes to the **Main Dashboard**; otherwise, it opens the **Login Screen**.
 
@@ -156,3 +156,50 @@ Run these commands inside the `mobile` workspace directory:
   npm run build:apk
   ```
   *Bumps the patch version, creates compilation assets, and outputs the release binary at `/android/app/build/outputs/apk/release/app-release.apk`.*
+
+
+Here is a detailed explanation of why Supabase pauses your project, its impact on the system, and how you can permanently avoid it in the future.
+
+---
+
+### 1. Why does Supabase pause the project?
+Supabase hosts your database on a virtual server. If you are on the **Supabase Free Tier**:
+* **Inactivity Rule**: Supabase will automatically pause your project if it receives **no database activity or API requests for 7 consecutive days (1 week)**.
+* **Why they do it**: Since it is a free service, Supabase pauses inactive projects to free up server resources for other active users.
+
+---
+
+### 2. What is the impact when it is paused?
+* **Web Dashboard**: The website will **not open** or will display a database connection error, because the website requires a live connection to Supabase to fetch profiles, rates, and logs.
+* **Mobile Application**:
+  * **First-Time Users / Logouts**: If a user is not logged in or is trying to log in on a new phone, they will receive a network connection error because the auth server is paused.
+  * **Logged-In Users (Offline Mode)**: Thanks to our **offline-first local caching** and **resilient offline auth fallback**, users who are already logged in can still open the app, log saree falls, view logs, and track income completely offline! 
+  * However, their local logs will remain queued on the phone and **will not sync to the cloud** until the Supabase project is unpaused.
+
+---
+
+### 3. How to avoid this problem in the future?
+
+There are two primary ways to prevent your project from pausing:
+
+#### Option A: Upgrade to the Pro Tier (Recommended for production)
+* **Cost**: $25 / month.
+* **How it works**: Upgrading to the Supabase Pro tier **permanently disables project pausing**. Your database and APIs will stay online 24/7/365, even if there is no activity for months.
+* **How to do it**: Go to your [Supabase Dashboard](https://supabase.com/dashboard), click on **Project Settings** -> **Subscription**, and upgrade to the Pro plan.
+
+---
+
+#### Option B: Automate a Free Weekly "Ping" (Keep it free)
+If you want to keep using the Free Tier, you must send at least one database request to Supabase every 7 days. You can automate this for free:
+
+1. **Use UptimeRobot (Easiest)**:
+   * Go to [UptimeRobot.com](https://uptimerobot.com/) (which is free).
+   * Create a new monitor of type `HTTP(s)`.
+   * Set the URL to your Supabase project URL (e.g., `https://your-project-id.supabase.co/rest/v1/`).
+   * Set the monitoring interval to **every 24 hours** or **every 7 days**.
+   * This will send a free automated ping to your Supabase API every day, counting as active database traffic, and **your project will never be paused again**.
+
+2. **Use a Free GitHub Action**:
+   * We can write a simple automation script in GitHub that runs a scheduled cron job (e.g., every Monday morning) to ping your Supabase API. This keeps the project alive indefinitely for free.
+
+Please let me know if you would like me to help you set up the free automated ping or if you have any questions about upgrading!
