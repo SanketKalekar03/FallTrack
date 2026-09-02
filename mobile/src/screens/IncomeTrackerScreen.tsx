@@ -21,8 +21,12 @@ import {
   Sparkles, 
   Trash2, 
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  Printer
 } from 'lucide-react-native';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 import { dbService } from '../services/dbService';
 import { COLORS } from '../utils/theme';
 import type { IncomePeriod, ProductionEntry, Rate } from '../types';
@@ -250,6 +254,126 @@ export const IncomeTrackerScreen = ({ navigation }: { navigation: any }) => {
     );
   };
 
+  const handlePrintPeriod = async (period: IncomePeriod) => {
+    setLoading(true);
+    try {
+      // Filter entries that fall inside the period dates (inclusive)
+      const periodEntries = entries
+        .filter(e => e.entry_date >= period.start_date && e.entry_date <= period.end_date)
+        .sort((a, b) => b.entry_date.localeCompare(a.entry_date)); // Sort descending by date
+
+      if (periodEntries.length === 0) {
+        showAlert('Export Alert', 'No records found for this period.');
+        return;
+      }
+
+      let totalFallsVal = 0;
+      let totalIncomeVal = 0;
+      let lastPrintedDate = '';
+
+      const rowsHtml = periodEntries.map((e, index) => {
+        const rate = resolveRateForDate(e.entry_date);
+        const income = (e.quantity / 12) * rate;
+        totalFallsVal += e.quantity;
+        totalIncomeVal += income;
+
+        const dateToPrint = e.entry_date === lastPrintedDate ? '' : formatDateToDDMMYYYY(e.entry_date);
+        lastPrintedDate = e.entry_date;
+
+        return `
+          <tr style="background-color: ${index % 2 === 1 ? '#F8FAFC' : '#FFFFFF'};">
+            <td style="padding: 10px; border-bottom: 1px solid #E2E8F0; font-size: 12px; color: #334155;">${dateToPrint}</td>
+            <td style="padding: 10px; border-bottom: 1px solid #E2E8F0; font-size: 13px; color: #1E293B; font-weight: bold;">${e.color?.name || 'Unspecified'}</td>
+            <td style="padding: 10px; border-bottom: 1px solid #E2E8F0; font-size: 12px; color: #334155; text-align: right;">${e.quantity}</td>
+            <td style="padding: 10px; border-bottom: 1px solid #E2E8F0; font-size: 12px; color: #334155; text-align: right;">₹${rate.toFixed(2)}</td>
+            <td style="padding: 10px; border-bottom: 1px solid #E2E8F0; font-size: 12px; color: #0F172A; text-align: right; font-weight: bold;">₹${income.toFixed(2)}</td>
+          </tr>
+        `;
+      }).join('');
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 20px; color: #0F172A; }
+            .header { border-bottom: 2px solid #0284C7; padding-bottom: 15px; margin-bottom: 20px; }
+            .title { font-size: 24px; font-weight: 800; color: #0284C7; margin: 0; }
+            .subtitle { font-size: 14px; color: #0F172A; font-weight: bold; margin-top: 5px; }
+            .range { font-size: 11px; color: #64748B; margin-top: 2px; }
+            .meta { font-size: 10px; color: #64748B; margin-top: 15px; margin-bottom: 25px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th { background-color: #0284C7; color: white; padding: 10px; text-align: left; font-size: 12px; font-weight: bold; }
+            .totals-row { font-weight: bold; background-color: #F1F5F9 !important; }
+            .totals-row td { padding: 12px 10px; border-top: 2px solid #E2E8F0; font-size: 13px; color: #0F172A; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1 class="title">FallTrack Payout Report</h1>
+            <p class="subtitle">Period: ${period.period_name}</p>
+            <p class="range">Date Range: ${formatDateToDDMMYYYY(period.start_date)} to ${formatDateToDDMMYYYY(period.end_date)}</p>
+          </div>
+          
+          <div class="meta">
+            <strong>Generated:</strong> ${new Date().toLocaleDateString('en-IN')}<br/>
+            <strong>Total Logs:</strong> ${periodEntries.length}
+          </div>
+          
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 25%;">Date</th>
+                <th style="width: 35%;">Color</th>
+                <th style="width: 15%; text-align: right;">Falls</th>
+                <th style="width: 12%; text-align: right;">Rate</th>
+                <th style="width: 13%; text-align: right;">Income</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+              <tr class="totals-row">
+                <td colspan="2">Period Summary Totals</td>
+                <td style="text-align: right;">${totalFallsVal.toLocaleString()}</td>
+                <td></td>
+                <td style="text-align: right;">₹${Math.round(totalIncomeVal).toLocaleString()}</td>
+              </tr>
+            </tbody>
+          </table>
+        </body>
+        </html>
+      `;
+
+      // Clean period name to make it a safe filename (e.g. "August 2026")
+      const cleanFileName = period.period_name.replace(/[^a-zA-Z0-9\s-]/g, '').trim();
+
+      // Print to PDF
+      const { uri } = await Print.printToFileAsync({ html: htmlContent });
+      const newUri = `${FileSystem.cacheDirectory}${cleanFileName}.pdf`;
+
+      // Copy the file to the custom filename in the cache directory
+      await FileSystem.copyAsync({
+        from: uri,
+        to: newUri
+      });
+
+      // Share PDF document
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(newUri, {
+          dialogTitle: `${cleanFileName} Report`,
+          mimeType: 'application/pdf'
+        });
+      } else {
+        showToast('PDF report generated!', 'success');
+      }
+    } catch (err: any) {
+      showAlert('Error', 'Failed to generate PDF: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
@@ -393,16 +517,25 @@ export const IncomeTrackerScreen = ({ navigation }: { navigation: any }) => {
                         </Text>
                       </View>
                       
-                      {isLatest ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                         <TouchableOpacity 
-                          style={styles.rollbackBtn}
-                          onPress={() => handleDelete(p.id)}
+                          style={styles.printCardBtn}
+                          onPress={() => handlePrintPeriod(p)}
                         >
-                          <Trash2 size={16} color={COLORS.danger} />
+                          <Printer size={15} color={COLORS.primary} />
                         </TouchableOpacity>
-                      ) : (
-                        <Lock size={15} color="#CBD5E1" />
-                      )}
+
+                        {isLatest ? (
+                          <TouchableOpacity 
+                            style={styles.rollbackBtn}
+                            onPress={() => handleDelete(p.id)}
+                          >
+                            <Trash2 size={16} color={COLORS.danger} />
+                          </TouchableOpacity>
+                        ) : (
+                          <Lock size={15} color="#CBD5E1" />
+                        )}
+                      </View>
                     </View>
 
                     <View style={styles.periodStats}>
@@ -710,6 +843,11 @@ const styles = StyleSheet.create({
     padding: 6,
     borderRadius: 6,
     backgroundColor: '#FEF2F2',
+  },
+  printCardBtn: {
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: '#F0F9FF',
   },
   periodStats: {
     flexDirection: 'row',

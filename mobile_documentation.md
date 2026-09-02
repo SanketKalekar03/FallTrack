@@ -40,7 +40,7 @@ Designed to operate in areas with poor cellular coverage, the application utiliz
 
 ### 🚀 Step 1: Boot & Custom Splash Screen
 1. When launched, the app mounts the animated splash screen in [App.tsx](file:///d:/FallTrack/mobile/App.tsx).
-2. The splash screen fades in and scales the logo, displaying an active loading indicator and the build version (e.g., `VERSION 1.0.6`).
+2. The splash screen fades in and scales the logo, displaying an active loading indicator and the build version (e.g., `VERSION 1.0.7`).
 3. **Safety Margin**: The version label is styled with `bottom: 80` to sit comfortably above Android's physical or virtual navigation buttons.
 4. During this animation, the app queries the local storage auth session. If a valid session exists, it routes to the **Main Dashboard**; otherwise, it opens the **Login Screen**.
 

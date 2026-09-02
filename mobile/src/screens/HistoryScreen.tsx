@@ -28,7 +28,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { dbService } from '../services/dbService';
 import { COLORS } from '../utils/theme';
-import type { ProductionEntry, Rate } from '../types';
+import type { ProductionEntry, Rate, IncomePeriod } from '../types';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatter';
 
 const parseDateString = (dateStr: string): Date => {
@@ -49,6 +49,7 @@ export const HistoryScreen = ({ navigation }: { navigation: any }) => {
   const [loading, setLoading] = useState(true);
   const [entries, setEntries] = useState<ProductionEntry[]>([]);
   const [rates, setRates] = useState<Rate[]>([]);
+  const [periods, setPeriods] = useState<IncomePeriod[]>([]);
   
   // Filters
   const [search, setSearch] = useState('');
@@ -56,6 +57,7 @@ export const HistoryScreen = ({ navigation }: { navigation: any }) => {
   const [endDate, setEndDate] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [pickerMode, setPickerMode] = useState<'start' | 'end' | null>(null);
+  const [expandedMonthKey, setExpandedMonthKey] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
@@ -78,6 +80,9 @@ export const HistoryScreen = ({ navigation }: { navigation: any }) => {
 
       const fetchedEntries = await dbService.getProductionEntries(undefined, forceLocal);
       setEntries(fetchedEntries);
+
+      const fetchedPeriods = await dbService.getIncomePeriods(forceLocal);
+      setPeriods(fetchedPeriods);
     } catch (err) {
       console.warn('History data load error:', err);
     } finally {
@@ -159,6 +164,49 @@ export const HistoryScreen = ({ navigation }: { navigation: any }) => {
   };
 
   const groupedData = applyFilters();
+
+  const handleMonthPress = (monthKey: string) => {
+    if (expandedMonthKey === monthKey) {
+      setExpandedMonthKey(null);
+    } else {
+      setExpandedMonthKey(monthKey);
+    }
+  };
+
+  // Determine current active groups and finalized period groups
+  const currentMonthGroups: typeof groupedData = [];
+  
+  // Group the daily date groups by period ID
+  const periodGroupsMap: { [periodId: string]: typeof groupedData } = {};
+  
+  groupedData.forEach(group => {
+    // Check if the group date falls within any finalized period
+    const matchedPeriod = periods.find(p => group.date >= p.start_date && group.date <= p.end_date);
+    
+    if (matchedPeriod) {
+      if (!periodGroupsMap[matchedPeriod.id]) {
+        periodGroupsMap[matchedPeriod.id] = [];
+      }
+      periodGroupsMap[matchedPeriod.id].push(group);
+    } else {
+      currentMonthGroups.push(group);
+    }
+  });
+
+  // Sort periods descending by start_date
+  const sortedPeriods = [...periods].sort((a, b) => b.start_date.localeCompare(a.start_date));
+
+  // Construct summaries for rendering (mapping to the same properties used in JSX)
+  const pastMonthSummaries = sortedPeriods.map(p => {
+    const dateGroups = periodGroupsMap[p.id] || [];
+    return {
+      monthKey: p.id,
+      monthName: p.period_name,
+      totalFalls: p.total_falls,
+      totalIncome: p.total_income,
+      dateGroups
+    };
+  });
 
   // ==========================================
   // EXPORT CSV (Mobile Sharing)
@@ -391,9 +439,18 @@ export const HistoryScreen = ({ navigation }: { navigation: any }) => {
         </View>
       ) : (
         <FlatList
-          data={groupedData}
+          data={currentMonthGroups}
           keyExtractor={(item) => item.date}
           contentContainerStyle={styles.listContent}
+          ListEmptyComponent={
+            currentMonthGroups.length === 0 && pastMonthSummaries.length > 0 ? (
+              <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textMuted }}>
+                  No entries recorded in the current month.
+                </Text>
+              </View>
+            ) : null
+          }
           renderItem={({ item }) => (
             <View style={styles.dateGroup}>
               {/* Date Group Header */}
@@ -415,7 +472,7 @@ export const HistoryScreen = ({ navigation }: { navigation: any }) => {
                 </View>
               </View>
 
-               {/* Group Entries */}
+              {/* Group Entries */}
               <View style={styles.groupItems}>
                 {item.data.map((entry) => {
                   const todayObj = new Date();
@@ -446,6 +503,86 @@ export const HistoryScreen = ({ navigation }: { navigation: any }) => {
               </View>
             </View>
           )}
+          ListFooterComponent={
+            pastMonthSummaries.length > 0 ? (
+              <View style={{ marginTop: 8 }}>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: COLORS.text, marginBottom: 12, marginTop: 8 }}>
+                  Previous Months Ledger
+                </Text>
+                
+                {pastMonthSummaries.map((monthSummary) => {
+                  const isExpanded = expandedMonthKey === monthSummary.monthKey;
+                  return (
+                    <View key={monthSummary.monthKey} style={styles.pastMonthCard}>
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        style={styles.pastMonthHeader}
+                        onPress={() => handleMonthPress(monthSummary.monthKey)}
+                      >
+                        <View style={{ flex: 1, marginRight: 8 }}>
+                          <Text style={styles.pastMonthTitle}>{monthSummary.monthName}</Text>
+                          <Text style={styles.pastMonthSummary}>
+                            Total: {monthSummary.totalFalls} Falls  •  Income: ₹{Math.round(monthSummary.totalIncome).toLocaleString()}
+                          </Text>
+                        </View>
+                        {isExpanded ? (
+                          <ChevronUp size={18} color={COLORS.primary} />
+                        ) : (
+                          <ChevronDown size={18} color={COLORS.primary} />
+                        )}
+                      </TouchableOpacity>
+
+                      {isExpanded && (
+                        <View>
+                          <View style={styles.pastMonthDivider} />
+                          <View style={styles.pastMonthContent}>
+                            {monthSummary.dateGroups.map((dateGroup) => (
+                              <View key={dateGroup.date} style={[styles.dateGroup, { marginHorizontal: 0, marginTop: 12, marginBottom: 0 }]}>
+                                {/* Date Group Header */}
+                                <View style={styles.groupHeader}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                                    <Calendar size={15} color={COLORS.primary} style={{ marginRight: 6 }} />
+                                    <Text style={styles.groupDate}>{formatDateToDDMMYYYY(dateGroup.date)}</Text>
+                                    <TouchableOpacity 
+                                      style={{ marginLeft: 8, padding: 4 }}
+                                      onPress={() => handleCopyGroup(dateGroup.date, dateGroup.data)}
+                                    >
+                                      <Copy size={13} color={COLORS.primary} />
+                                    </TouchableOpacity>
+                                  </View>
+                                  <View style={styles.groupBadge}>
+                                    <Text style={styles.groupBadgeText}>
+                                      {dateGroup.data.reduce((sum, e) => sum + e.quantity, 0)} Falls
+                                    </Text>
+                                  </View>
+                                </View>
+
+                                {/* Group Entries */}
+                                <View style={styles.groupItems}>
+                                  {dateGroup.data.map((entry) => (
+                                    <View key={entry.id} style={styles.entryRow}>
+                                      <View>
+                                        <Text style={styles.entryColor}>{entry.color?.name || 'Unspecified'}</Text>
+                                      </View>
+                                      <View style={styles.entryRowRight}>
+                                        <View style={styles.qtyBadge}>
+                                          <Text style={styles.qtyText}>{entry.quantity} Falls</Text>
+                                        </View>
+                                      </View>
+                                    </View>
+                                  ))}
+                                </View>
+                              </View>
+                            ))}
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            ) : null
+          }
         />
       )}
 
@@ -727,5 +864,39 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: COLORS.primary,
+  },
+  pastMonthCard: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  pastMonthHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+  },
+  pastMonthTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
+  pastMonthSummary: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+    marginTop: 4,
+  },
+  pastMonthDivider: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+  },
+  pastMonthContent: {
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    backgroundColor: '#FFFFFF',
   },
 });
