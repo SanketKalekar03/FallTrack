@@ -8,10 +8,11 @@ import {
   ActivityIndicator, 
   KeyboardAvoidingView, 
   Platform, 
-  ScrollView 
+  ScrollView,
+  Image 
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Mail, Lock, Sparkles, ArrowRight, ShieldCheck, CloudLightning } from 'lucide-react-native';
+import { Mail, Lock, Sparkles, ArrowRight, ShieldCheck, CloudLightning, Eye, EyeOff } from 'lucide-react-native';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAlert } from '../components/AlertProvider';
@@ -41,6 +42,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const mode = isSupabaseConfigured ? 'online' : 'offline';
 
@@ -49,6 +52,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     setEmail('');
     setPassword('');
     setConfirmPassword('');
+    setShowPassword(false);
+    setShowConfirmPassword(false);
   };
 
   const handleSubmit = async () => {
@@ -242,9 +247,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       >
         {/* Brand Header */}
         <View style={styles.brandHeader}>
-          <View style={styles.logoIcon}>
-            <Sparkles size={32} color={COLORS.primary} />
-          </View>
+          <Image 
+            source={require('../../assets/icon.png')} 
+            style={styles.brandLogo} 
+            resizeMode="contain" 
+          />
           <Text style={styles.brandTitle}>FallTrack</Text>
           <Text style={styles.brandSubtitle}>Production & Income Ledger</Text>
         </View>
@@ -297,10 +304,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 onChangeText={setPassword}
                 placeholder="••••••••"
                 placeholderTextColor="#94A3B8"
-                secureTextEntry
+                secureTextEntry={!showPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
+              <TouchableOpacity
+                style={styles.eyeBtn}
+                onPress={() => setShowPassword(prev => !prev)}
+                activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                {showPassword ? (
+                  <EyeOff size={18} color={COLORS.textMuted} />
+                ) : (
+                  <Eye size={18} color={COLORS.textMuted} />
+                )}
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -316,10 +335,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                   onChangeText={setConfirmPassword}
                   placeholder="••••••••"
                   placeholderTextColor="#94A3B8"
-                  secureTextEntry
+                  secureTextEntry={!showConfirmPassword}
                   autoCapitalize="none"
                   autoCorrect={false}
                 />
+                <TouchableOpacity
+                  style={styles.eyeBtn}
+                  onPress={() => setShowConfirmPassword(prev => !prev)}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff size={18} color={COLORS.textMuted} />
+                  ) : (
+                    <Eye size={18} color={COLORS.textMuted} />
+                  )}
+                </TouchableOpacity>
               </View>
             </View>
           )}
@@ -375,16 +406,11 @@ const styles = StyleSheet.create({
     marginBottom: 32,
     marginTop: 10,
   },
-  logoIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 18,
-    backgroundColor: COLORS.lavender,
-    justifyContent: 'center',
-    alignItems: 'center',
+  brandLogo: {
+    width: 68,
+    height: 68,
+    borderRadius: 16,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(2, 132, 199, 0.1)',
   },
   brandTitle: {
     fontSize: 26,
@@ -470,6 +496,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.text,
     padding: 0,
+  },
+  eyeBtn: {
+    padding: 4,
+    marginLeft: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   submitBtn: {
     backgroundColor: COLORS.primary,

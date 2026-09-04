@@ -6,7 +6,8 @@ import {
   ScrollView, 
   TouchableOpacity, 
   ActivityIndicator, 
-  Dimensions 
+  Dimensions,
+  Image
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { 
@@ -144,9 +145,11 @@ export const DashboardScreen = ({ navigation }: { navigation: any }) => {
       <View style={styles.header}>
         <View>
           <View style={styles.logoBadgeContainer}>
-            <View style={styles.logoBadge}>
-              <Text style={styles.logoBadgeText}>FT</Text>
-            </View>
+            <Image 
+              source={require('../../assets/icon.png')} 
+              style={{ width: 26, height: 26, borderRadius: 6 }} 
+              resizeMode="contain"
+            />
             <Text style={styles.headerTitle}>{appName}</Text>
           </View>
           <Text style={styles.headerSubtitle}>Manager: {managerName || '...'}</Text>

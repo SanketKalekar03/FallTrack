@@ -478,6 +478,7 @@ export const dbService = {
     const trimmedName = name.trim();
     if (isSupabaseConfigured && supabase) {
       try {
+        const { data: { user } } = await supabase.auth.getUser();
         // Check if it already exists to avoid conflict
         const { data: existing } = await supabase
           .from('colors')
@@ -491,7 +492,7 @@ export const dbService = {
 
         const { data, error } = await supabase
           .from('colors')
-          .insert([{ name: trimmedName }])
+          .insert([{ name: trimmedName, user_id: user?.id }])
           .select()
           .single();
         if (error) throw error;
@@ -625,11 +626,13 @@ export const dbService = {
   async createRate(rate: Omit<Rate, 'id'>): Promise<Rate> {
     if (isSupabaseConfigured && supabase) {
       try {
+        const { data: { user } } = await supabase.auth.getUser();
         const { data, error } = await supabase
           .from('rates')
           .insert([{
             rate_per_dozen: rate.rate_per_dozen,
-            effective_from: rate.effective_from
+            effective_from: rate.effective_from,
+            user_id: user?.id
           }])
           .select()
           .single();
@@ -793,10 +796,12 @@ export const dbService = {
   async saveProductionEntries(entries: Omit<ProductionEntry, 'id'>[]): Promise<ProductionEntry[]> {
     if (isSupabaseConfigured && supabase) {
       try {
+        const { data: { user } } = await supabase.auth.getUser();
         const formatted = entries.map(e => ({
           entry_date: e.entry_date,
           color_id: e.color_id,
-          quantity: e.quantity
+          quantity: e.quantity,
+          user_id: user?.id
         }));
         const { data, error } = await supabase
           .from('production_entries')
@@ -1056,6 +1061,7 @@ export const dbService = {
   async createIncomePeriod(period: Omit<IncomePeriod, 'id'>): Promise<IncomePeriod> {
     if (isSupabaseConfigured && supabase) {
       try {
+        const { data: { user } } = await supabase.auth.getUser();
         const { data, error } = await supabase
           .from('income_periods')
           .insert([{
@@ -1063,7 +1069,8 @@ export const dbService = {
             start_date: period.start_date,
             end_date: period.end_date,
             total_falls: period.total_falls,
-            total_income: period.total_income
+            total_income: period.total_income,
+            user_id: user?.id
           }])
           .select()
           .single();

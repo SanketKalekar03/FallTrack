@@ -78,7 +78,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
       {/* Header Logo */}
       <div className="px-2.5 mb-3.5">
         <h1 className="text-base font-bold text-brand-primary flex items-center gap-2">
-          <span className="bg-brand-primary text-white p-0.5 px-1.5 rounded-md text-[10px] block leading-none font-extrabold tracking-wider">FT</span>
+          <img src="/logo.png" alt="FallTrack" className="w-6 h-6 rounded-md object-contain shadow-xs" />
           {appName}
         </h1>
         <p className="text-[9px] text-brand-text-muted mt-0.5">Production Manager</p>

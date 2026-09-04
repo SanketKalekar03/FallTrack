@@ -352,52 +352,6 @@ export default function App() {
   // Render animated splash screen while loading
   if (!isSplashAnimationComplete) {
     return (
-      /* ==========================================
-         OLD SPLASH SCREEN (COMMENTED OUT AS REQUESTED)
-         ==========================================
-      <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
-        <Animated.View style={[StyleSheet.absoluteFillObject, {
-          backgroundColor: '#E6F4FE',
-          justifyContent: 'center',
-          alignItems: 'center',
-          opacity: splashOpacity,
-        }]}>
-          <Animated.View style={{
-            alignItems: 'center',
-            transform: [{ scale: logoScale }],
-            opacity: logoOpacity,
-          }}>
-            <View style={{
-              width: 90,
-              height: 90,
-              borderRadius: 22,
-              backgroundColor: '#0284C7',
-              justifyContent: 'center',
-              alignItems: 'center',
-              shadowColor: '#0284C7',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.25,
-              shadowRadius: 8,
-              elevation: 6,
-              marginBottom: 16,
-            }}>
-              <Text style={{ fontSize: 38, fontWeight: '900', color: '#FFFFFF' }}>FT</Text>
-            </View>
-            <Text style={{ fontSize: 24, fontWeight: '900', color: '#0F172A', letterSpacing: 0.5 }}>FallTrack</Text>
-            <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748B', marginTop: 4, letterSpacing: 0.8, textTransform: 'uppercase' }}>Production Ledger</Text>
-          </Animated.View>
-          
-          <View style={{ position: 'absolute', bottom: 80, alignItems: 'center' }}>
-            <ActivityIndicator size="large" color="#0284C7" style={{ marginBottom: 14 }} />
-            <Text style={{ fontSize: 11, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.8 }}>VERSION {packageJson.version}</Text>
-          </View>
-        </Animated.View>
-      </View>
-      ========================================== */
-
-      // ==========================================
-      // NEW REDESIGNED ANIMATED SPLASH SCREEN
-      // ==========================================
       <View style={{ flex: 1 }}>
         <StatusBar style="light" />
         <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: splashOpacity }]}>

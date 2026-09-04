@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -21,6 +21,7 @@ import {
   AlertCircle,
   Palette,
   ChevronRight,
+  ChevronLeft,
   Plus,
   Trash2,
   Edit2,
@@ -40,7 +41,18 @@ import { exportEntriesToPDFMobile, saveEntriesToPDFMobile, exportEntriesToCSVMob
 import { matchColor } from '../utils/transliterate';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatter';
 
-export const SettingsScreen = ({ navigation, onLogout, userEmail }: { navigation: any; onLogout: () => void; userEmail: string }) => {
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+interface SettingsScreenProps {
+  navigation: any;
+  onLogout: () => void;
+  userEmail: string;
+}
+
+export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, onLogout, userEmail }) => {
   const insets = useSafeAreaInsets();
   const { showToast, showAlert, showConfirm } = useAlert();
   const [loading, setLoading] = useState(false);
@@ -78,9 +90,13 @@ export const SettingsScreen = ({ navigation, onLogout, userEmail }: { navigation
   const [reportEndDate, setReportEndDate] = useState(new Date());
   const [showReportStartPicker, setShowReportStartPicker] = useState(false);
   const [showReportEndPicker, setShowReportEndPicker] = useState(false);
+  const [showMonthPickerModal, setShowMonthPickerModal] = useState(false);
+  const [monthPickerYear, setMonthPickerYear] = useState(() => new Date().getFullYear());
   const [reportEntries, setReportEntries] = useState<(any)[]>([]);
   const [reportLoading, setReportLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const cachedAllEntriesRef = useRef<any[] | null>(null);
+  const activeRequestIdRef = useRef(0);
 
   useEffect(() => {
     loadSettingsData();
@@ -277,49 +293,66 @@ export const SettingsScreen = ({ navigation, onLogout, userEmail }: { navigation
   // ==========================================
   // Reports & Export Helpers
   // ==========================================
-  useEffect(() => {
-    if (isReportsModalVisible) {
-      loadReportsData();
-    }
-  }, [reportType, reportStartDate, reportEndDate, isReportsModalVisible]);
+  const formatLocalDate = (d: Date): string => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
 
-  const loadReportsData = async () => {
+  const loadReportsData = async (
+    targetDate: Date = reportStartDate,
+    targetType: 'daily' | 'monthly' | 'yearly' | 'custom' = reportType,
+    targetEnd: Date = reportEndDate
+  ) => {
+    const reqId = ++activeRequestIdRef.current;
     setReportLoading(true);
+
     try {
-      let entries = [];
-      if (reportType === 'daily') {
-        const dateStr = reportStartDate.toISOString().split('T')[0];
-        entries = await dbService.getProductionEntries({
-          startDate: dateStr,
-          endDate: dateStr
-        });
-      } else if (reportType === 'monthly') {
-        const year = reportStartDate.getFullYear();
-        const month = String(reportStartDate.getMonth() + 1).padStart(2, '0');
-        const monthStr = `${year}-${month}`;
-        entries = await dbService.getProductionEntries({
-          month: monthStr
-        });
-      } else if (reportType === 'yearly') {
-        const yearStr = reportStartDate.getFullYear().toString();
-        entries = await dbService.getProductionEntries({
-          year: yearStr
-        });
-      } else { // 'custom'
-        const startStr = reportStartDate.toISOString().split('T')[0];
-        const endStr = reportEndDate.toISOString().split('T')[0];
-        entries = await dbService.getProductionEntries({
-          startDate: startStr,
-          endDate: endStr
-        });
+      if (!cachedAllEntriesRef.current) {
+        const all = await dbService.getProductionEntries();
+        if (reqId !== activeRequestIdRef.current) return;
+        cachedAllEntriesRef.current = all;
       }
-      setReportEntries(entries);
+
+      const all = cachedAllEntriesRef.current || [];
+      let filtered: any[] = [];
+
+      if (targetType === 'daily') {
+        const dateStr = formatLocalDate(targetDate);
+        filtered = all.filter(e => e.entry_date === dateStr);
+      } else if (targetType === 'monthly') {
+        const year = targetDate.getFullYear();
+        const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+        const monthStr = `${year}-${month}`;
+        filtered = all.filter(e => e.entry_date && e.entry_date.startsWith(monthStr));
+      } else if (targetType === 'yearly') {
+        const yearStr = targetDate.getFullYear().toString();
+        filtered = all.filter(e => e.entry_date && e.entry_date.startsWith(yearStr));
+      } else { // 'custom'
+        const startStr = formatLocalDate(targetDate);
+        const endStr = formatLocalDate(targetEnd);
+        filtered = all.filter(e => e.entry_date && e.entry_date >= startStr && e.entry_date <= endStr);
+      }
+
+      if (reqId === activeRequestIdRef.current) {
+        setReportEntries(filtered);
+      }
     } catch (err) {
       console.warn('Load reports data error:', err);
     } finally {
-      setReportLoading(false);
+      if (reqId === activeRequestIdRef.current) {
+        setReportLoading(false);
+      }
     }
   };
+
+  useEffect(() => {
+    if (isReportsModalVisible) {
+      cachedAllEntriesRef.current = null;
+      loadReportsData(reportStartDate, reportType, reportEndDate);
+    }
+  }, [isReportsModalVisible]);
 
   const handleExportPDF = async () => {
     if (isExporting) return;
@@ -334,14 +367,14 @@ export const SettingsScreen = ({ navigation, onLogout, userEmail }: { navigation
       
       let title = '';
       if (reportType === 'daily') {
-        title = `Daily Production Report (${reportStartDate.toLocaleDateString('en-IN')})`;
+        title = `Daily Production Report (${formatDateToDDMMYYYY(formatLocalDate(reportStartDate))})`;
       } else if (reportType === 'monthly') {
-        const monthLabel = reportStartDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+        const monthLabel = `${MONTH_NAMES[reportStartDate.getMonth()]} ${reportStartDate.getFullYear()}`;
         title = `Monthly Production Report (${monthLabel})`;
       } else if (reportType === 'yearly') {
         title = `Yearly Production Report (${reportStartDate.getFullYear()})`;
       } else {
-        title = `Production Report (${reportStartDate.toLocaleDateString('en-IN')} - ${reportEndDate.toLocaleDateString('en-IN')})`;
+        title = `Production Report (${formatDateToDDMMYYYY(formatLocalDate(reportStartDate))} - ${formatDateToDDMMYYYY(formatLocalDate(reportEndDate))})`;
       }
       
       await exportEntriesToPDFMobile(reportEntries, rates, title, profile);
@@ -366,14 +399,14 @@ export const SettingsScreen = ({ navigation, onLogout, userEmail }: { navigation
       
       let title = '';
       if (reportType === 'daily') {
-        title = `Daily Production Report (${reportStartDate.toLocaleDateString('en-IN')})`;
+        title = `Daily Production Report (${formatDateToDDMMYYYY(formatLocalDate(reportStartDate))})`;
       } else if (reportType === 'monthly') {
-        const monthLabel = reportStartDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+        const monthLabel = `${MONTH_NAMES[reportStartDate.getMonth()]} ${reportStartDate.getFullYear()}`;
         title = `Monthly Production Report (${monthLabel})`;
       } else if (reportType === 'yearly') {
         title = `Yearly Production Report (${reportStartDate.getFullYear()})`;
       } else {
-        title = `Production Report (${reportStartDate.toLocaleDateString('en-IN')} - ${reportEndDate.toLocaleDateString('en-IN')})`;
+        title = `Production Report (${formatDateToDDMMYYYY(formatLocalDate(reportStartDate))} - ${formatDateToDDMMYYYY(formatLocalDate(reportEndDate))})`;
       }
       
       await saveEntriesToPDFMobile(reportEntries, rates, title, profile);
@@ -397,7 +430,7 @@ export const SettingsScreen = ({ navigation, onLogout, userEmail }: { navigation
       
       let title = '';
       if (reportType === 'daily') {
-        title = `Daily_Report_${reportStartDate.toISOString().split('T')[0]}`;
+        title = `Daily_Report_${formatLocalDate(reportStartDate)}`;
       } else if (reportType === 'monthly') {
         const year = reportStartDate.getFullYear();
         const month = String(reportStartDate.getMonth() + 1).padStart(2, '0');
@@ -405,7 +438,7 @@ export const SettingsScreen = ({ navigation, onLogout, userEmail }: { navigation
       } else if (reportType === 'yearly') {
         title = `Yearly_Report_${reportStartDate.getFullYear()}`;
       } else {
-        title = `Production_Report_${reportStartDate.toISOString().split('T')[0]}_to_${reportEndDate.toISOString().split('T')[0]}`;
+        title = `Production_Report_${formatLocalDate(reportStartDate)}_to_${formatLocalDate(reportEndDate)}`;
       }
       
       await exportEntriesToCSVMobile(reportEntries, rates, title);
@@ -423,18 +456,14 @@ export const SettingsScreen = ({ navigation, onLogout, userEmail }: { navigation
     start.setDate(end.getDate() - days);
     setReportStartDate(start);
     setReportEndDate(end);
-    setTimeout(() => {
-      loadReportsData();
-    }, 50);
+    loadReportsData(start, 'custom', end);
   };
 
   const onReportStartDateChange = (event: any, selectedDate?: Date) => {
     setShowReportStartPicker(false);
     if (selectedDate) {
       setReportStartDate(selectedDate);
-      setTimeout(() => {
-        loadReportsData();
-      }, 50);
+      loadReportsData(selectedDate, reportType, reportEndDate);
     }
   };
 
@@ -442,9 +471,7 @@ export const SettingsScreen = ({ navigation, onLogout, userEmail }: { navigation
     setShowReportEndPicker(false);
     if (selectedDate) {
       setReportEndDate(selectedDate);
-      setTimeout(() => {
-        loadReportsData();
-      }, 50);
+      loadReportsData(reportStartDate, reportType, selectedDate);
     }
   };
 
@@ -968,28 +995,40 @@ export const SettingsScreen = ({ navigation, onLogout, userEmail }: { navigation
               <View style={styles.tabSelector}>
                 <TouchableOpacity 
                   style={[styles.tabButton, reportType === 'daily' && styles.activeTabButton]}
-                  onPress={() => setReportType('daily')}
+                  onPress={() => {
+                    setReportType('daily');
+                    loadReportsData(reportStartDate, 'daily', reportEndDate);
+                  }}
                 >
                   <Text style={[styles.tabButtonText, reportType === 'daily' && styles.activeTabButtonText]}>Daily</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity 
                   style={[styles.tabButton, reportType === 'monthly' && styles.activeTabButton]}
-                  onPress={() => setReportType('monthly')}
+                  onPress={() => {
+                    setReportType('monthly');
+                    loadReportsData(reportStartDate, 'monthly', reportEndDate);
+                  }}
                 >
                   <Text style={[styles.tabButtonText, reportType === 'monthly' && styles.activeTabButtonText]}>Monthly</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity 
                   style={[styles.tabButton, reportType === 'yearly' && styles.activeTabButton]}
-                  onPress={() => setReportType('yearly')}
+                  onPress={() => {
+                    setReportType('yearly');
+                    loadReportsData(reportStartDate, 'yearly', reportEndDate);
+                  }}
                 >
                   <Text style={[styles.tabButtonText, reportType === 'yearly' && styles.activeTabButtonText]}>Yearly</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity 
                   style={[styles.tabButton, reportType === 'custom' && styles.activeTabButton]}
-                  onPress={() => setReportType('custom')}
+                  onPress={() => {
+                    setReportType('custom');
+                    loadReportsData(reportStartDate, 'custom', reportEndDate);
+                  }}
                 >
                   <Text style={[styles.tabButtonText, reportType === 'custom' && styles.activeTabButtonText]}>Custom</Text>
                 </TouchableOpacity>
@@ -1058,11 +1097,14 @@ export const SettingsScreen = ({ navigation, onLogout, userEmail }: { navigation
                     <TouchableOpacity 
                       activeOpacity={0.7}
                       style={[styles.modalSearchBox, { marginBottom: 0 }]} 
-                      onPress={() => setShowReportStartPicker(true)}
+                      onPress={() => {
+                        setMonthPickerYear(reportStartDate.getFullYear());
+                        setShowMonthPickerModal(true);
+                      }}
                     >
                       <Calendar size={16} color={COLORS.textMuted} style={{ marginRight: 8 }} />
                       <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text }}>
-                        {reportStartDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                        {MONTH_NAMES[reportStartDate.getMonth()]} {reportStartDate.getFullYear()}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -1078,6 +1120,7 @@ export const SettingsScreen = ({ navigation, onLogout, userEmail }: { navigation
                           const newDate = new Date(reportStartDate);
                           newDate.setFullYear(newDate.getFullYear() - 1);
                           setReportStartDate(newDate);
+                          loadReportsData(newDate, 'yearly', reportEndDate);
                         }}
                       >
                         <Text style={{ fontSize: 16, fontWeight: '800', color: COLORS.text }}> - </Text>
@@ -1091,6 +1134,7 @@ export const SettingsScreen = ({ navigation, onLogout, userEmail }: { navigation
                           const newDate = new Date(reportStartDate);
                           newDate.setFullYear(newDate.getFullYear() + 1);
                           setReportStartDate(newDate);
+                          loadReportsData(newDate, 'yearly', reportEndDate);
                         }}
                       >
                         <Text style={{ fontSize: 16, fontWeight: '800', color: COLORS.text }}> + </Text>
@@ -1171,20 +1215,18 @@ export const SettingsScreen = ({ navigation, onLogout, userEmail }: { navigation
               </View>
 
               {/* Summary Stats */}
-              {reportEntries.length > 0 && (
-                <View style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 12, marginBottom: 12, flexDirection: 'row', justifyContent: 'space-around' }}>
-                  <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 10, color: COLORS.textMuted, fontWeight: '800', textTransform: 'uppercase' }}>Records</Text>
-                    <Text style={{ fontSize: 16, fontWeight: '800', color: COLORS.text, marginTop: 2 }}>{reportEntries.length}</Text>
-                  </View>
-                  <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 10, color: COLORS.textMuted, fontWeight: '800', textTransform: 'uppercase' }}>Total Falls</Text>
-                    <Text style={{ fontSize: 16, fontWeight: '800', color: '#2563EB', marginTop: 2 }}>
-                      {reportEntries.reduce((sum, e) => sum + e.quantity, 0).toLocaleString()}
-                    </Text>
-                  </View>
+              <View style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 12, marginBottom: 12, flexDirection: 'row', justifyContent: 'space-around' }}>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 10, color: COLORS.textMuted, fontWeight: '800', textTransform: 'uppercase' }}>Records</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: COLORS.text, marginTop: 2 }}>{reportEntries.length}</Text>
                 </View>
-              )}
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 10, color: COLORS.textMuted, fontWeight: '800', textTransform: 'uppercase' }}>Total Falls</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#2563EB', marginTop: 2 }}>
+                    {reportEntries.reduce((sum, e) => sum + (Number(e.quantity) || 0), 0).toLocaleString()}
+                  </Text>
+                </View>
+              </View>
 
               {/* Preview List */}
               <FlatList
@@ -1211,6 +1253,80 @@ export const SettingsScreen = ({ navigation, onLogout, userEmail }: { navigation
                   </View>
                 )}
               />
+            </View>
+          )}
+
+          {/* Month Picker Overlay */}
+          {showMonthPickerModal && (
+            <View style={styles.monthPickerOverlay}>
+              <TouchableOpacity 
+                activeOpacity={1} 
+                style={StyleSheet.absoluteFill} 
+                onPress={() => setShowMonthPickerModal(false)} 
+              />
+              <View style={styles.monthPickerCard}>
+                <View style={styles.monthPickerHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Calendar size={18} color="#2563EB" style={{ marginRight: 8 }} />
+                    <Text style={styles.monthPickerTitle}>Select Month</Text>
+                  </View>
+                  <TouchableOpacity 
+                    onPress={() => setShowMonthPickerModal(false)}
+                    style={styles.monthPickerCloseBtn}
+                  >
+                    <X size={18} color={COLORS.textMuted} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Year Switcher */}
+                <View style={styles.monthPickerYearRow}>
+                  <TouchableOpacity
+                    style={styles.yearChangeBtn}
+                    onPress={() => setMonthPickerYear(y => y - 1)}
+                  >
+                    <ChevronLeft size={18} color={COLORS.text} />
+                  </TouchableOpacity>
+                  <Text style={styles.monthPickerYearText}>{monthPickerYear}</Text>
+                  <TouchableOpacity
+                    style={styles.yearChangeBtn}
+                    onPress={() => setMonthPickerYear(y => y + 1)}
+                  >
+                    <ChevronRight size={18} color={COLORS.text} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* 12 Months Grid */}
+                <View style={styles.monthsGrid}>
+                  {MONTH_NAMES.map((mName, idx) => {
+                    const isSelected = 
+                      reportStartDate.getMonth() === idx && 
+                      reportStartDate.getFullYear() === monthPickerYear;
+                    return (
+                      <TouchableOpacity
+                        key={mName}
+                        style={[
+                          styles.monthGridItem,
+                          isSelected && styles.monthGridItemSelected
+                        ]}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          const newDate = new Date(monthPickerYear, idx, 1);
+                          setReportStartDate(newDate);
+                          setShowMonthPickerModal(false);
+                          loadReportsData(newDate, 'monthly', reportEndDate);
+                        }}
+                      >
+                        <Text style={[
+                          styles.monthGridItemText,
+                          isSelected && styles.monthGridItemTextSelected
+                        ]}>
+                          {mName}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
             </View>
           )}
         </View>
@@ -1594,5 +1710,96 @@ const styles = StyleSheet.create({
   },
   activeTabButtonText: {
     color: COLORS.primary,
+  },
+  monthPickerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+    elevation: 10,
+    padding: 20,
+  },
+  monthPickerCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  monthPickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  monthPickerTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  monthPickerCloseBtn: {
+    padding: 4,
+  },
+  monthPickerYearRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 40,
+    marginBottom: 14,
+  },
+  yearChangeBtn: {
+    padding: 6,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  monthPickerYearText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  monthsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  monthGridItem: {
+    width: '48%',
+    paddingVertical: 10,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthGridItemSelected: {
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
+  },
+  monthGridItemText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  monthGridItemTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '800',
   },
 });

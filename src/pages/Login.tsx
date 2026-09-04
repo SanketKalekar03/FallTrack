@@ -83,10 +83,8 @@ export const Login: React.FC = () => {
           
           <div className="z-10">
             {/* Logo */}
-            <div className="flex items-center gap-2 mb-8">
-              <div className="w-8 h-8 rounded-lg bg-white/10 backdrop-blur-md flex items-center justify-center font-extrabold text-white text-base shadow-sm border border-white/20">
-                FT
-              </div>
+            <div className="flex items-center gap-2.5 mb-8">
+              <img src="/logo.png" alt="FallTrack" className="w-9 h-9 rounded-xl object-contain shadow-md" />
               <span className="font-extrabold text-lg tracking-tight">FallTrack</span>
             </div>
             
