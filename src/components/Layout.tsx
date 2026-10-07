@@ -173,16 +173,39 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
       {/* Main Container */}
       <div className="flex-1 md:pl-52 flex flex-col min-h-screen">
         {/* Header Bar */}
-        <header className="sticky top-0 bg-brand-bg/85 backdrop-blur-md border-b border-slate-100 px-4 py-2 flex items-center justify-between z-10 no-print">
+        <header className="sticky top-0 bg-brand-bg/85 backdrop-blur-md border-b border-slate-100 px-5 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between z-10 no-print">
           <div>
-            <h2 className="text-base font-bold text-slate-800">{getPageTitle()}</h2>
-            <p className="text-[10px] text-brand-text-muted mt-0.5">{getPageSubtitle()}</p>
+            <h2 className="text-lg sm:text-xl font-bold tracking-tight text-slate-800">{getPageTitle()}</h2>
+            <p className="text-xs sm:text-[13px] font-medium text-brand-text-muted mt-0.5">{getPageSubtitle()}</p>
           </div>
-          
+
           <div className="flex items-center gap-3">
-            <span className="hidden sm:inline-block px-2 py-0.5 bg-white border border-slate-100 rounded-full text-[9px] text-brand-text-muted shadow-sm font-semibold">
-              📅 Local Time: {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-            </span>
+            {/* Local Date Badge */}
+            <div className="hidden sm:inline-flex items-center gap-2 px-2.5 py-1 bg-white border border-slate-200/70 rounded-xl shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
+              <div className="w-7 h-7 rounded-lg bg-[#EFF6FF] flex items-center justify-center shrink-0">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="3" y="5" width="18" height="15.5" rx="3.5" fill="#FFFFFF" stroke="#2563EB" strokeWidth="1.8" />
+                  <path d="M3 9.5C3 6.8 4.5 5 7.5 5H16.5C19.5 5 21 6.8 21 9.5V10H3V9.5Z" fill="#2563EB" />
+                  <rect x="7" y="2" width="2" height="4.5" rx="1" fill="#1D4ED8" />
+                  <rect x="15" y="2" width="2" height="4.5" rx="1" fill="#1D4ED8" />
+                  <circle cx="7" cy="13" r="0.9" fill="#2563EB" />
+                  <circle cx="10.3" cy="13" r="0.9" fill="#2563EB" />
+                  <circle cx="13.7" cy="13" r="0.9" fill="#2563EB" />
+                  <circle cx="17" cy="13" r="0.9" fill="#2563EB" />
+                  <circle cx="7" cy="16.5" r="0.9" fill="#2563EB" />
+                  <circle cx="10.3" cy="16.5" r="0.9" fill="#2563EB" />
+                  <circle cx="13.7" cy="16.5" r="0.9" fill="#2563EB" />
+                  <circle cx="17" cy="16.5" r="0.9" fill="#2563EB" />
+                </svg>
+              </div>
+              <div className="h-3.5 w-[1px] bg-blue-100 shrink-0" />
+              <div className="text-[11.5px] sm:text-xs leading-none whitespace-nowrap">
+                <span className="font-medium text-slate-500">Local Date:</span>
+                <span className="font-bold text-slate-800 ml-1">
+                  {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </span>
+              </div>
+            </div>
             
             {/* Mobile Menu Toggle */}
             <button 

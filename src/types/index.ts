@@ -2,6 +2,7 @@ export interface Color {
   id: string;
   name: string;
   created_at?: string;
+  user_id?: string | null;
 }
 
 export interface ProductionEntry {

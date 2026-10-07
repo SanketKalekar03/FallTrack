@@ -34,7 +34,7 @@ import {
   Calendar
 } from 'lucide-react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { dbService } from '../services/dbService';
+import { dbService, deduplicateColors } from '../services/dbService';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { COLORS } from '../utils/theme';
 import { exportEntriesToPDFMobile, saveEntriesToPDFMobile, exportEntriesToCSVMobile } from '../utils/reportExport';
@@ -120,18 +120,20 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, onLo
     setColorLoading(true);
     try {
       const colors = await dbService.getColors();
+      const cleanColors = deduplicateColors(colors);
       const entries = await dbService.getProductionEntries();
       
-      const counts: { [colorId: string]: number } = {};
+      const counts: { [normName: string]: number } = {};
       entries.forEach(e => {
-        if (e.color_id) {
-          counts[e.color_id] = (counts[e.color_id] || 0) + 1;
+        if (e.color && e.color.name) {
+          const norm = e.color.name.trim().toLowerCase();
+          counts[norm] = (counts[norm] || 0) + 1;
         }
       });
 
-      const mappedColors = colors.map(c => ({
+      const mappedColors = cleanColors.map(c => ({
         ...c,
-        usageCount: counts[c.id] || 0
+        usageCount: counts[c.name.trim().toLowerCase()] || 0
       }));
 
       setColorsList(mappedColors);

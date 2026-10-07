@@ -27,7 +27,7 @@ import {
   ChevronDown
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { dbService } from '../services/dbService';
+import { dbService, deduplicateColors } from '../services/dbService';
 import { matchColor, isExactColorMatch } from '../utils/transliterate';
 import { COLORS } from '../utils/theme';
 import type { Color } from '../types';
@@ -95,25 +95,29 @@ export const DailyEntryScreen = ({ navigation }: { navigation: any }) => {
   const loadColors = async (forceLocal = false) => {
     try {
       const fetchedColors = await dbService.getColors(forceLocal);
-      setColors(fetchedColors);
-      setFilteredColors(fetchedColors);
+      const cleanColors = deduplicateColors(fetchedColors);
+      setColors(cleanColors);
+      setFilteredColors(cleanColors);
 
       // Load recently used colors from production logs
       const recentEntries = await dbService.getProductionEntries(undefined, forceLocal);
       const uniqueRecents: Color[] = [];
-      const seenIds = new Set<string>();
+      const seenNames = new Set<string>();
 
       for (const entry of recentEntries) {
-        if (entry.color && !seenIds.has(entry.color.id)) {
-          seenIds.add(entry.color.id);
-          uniqueRecents.push(entry.color);
-          if (uniqueRecents.length >= 10) break; // Limit to top 10 most recent colors
+        if (entry.color && entry.color.name) {
+          const norm = entry.color.name.trim().toLowerCase();
+          if (!seenNames.has(norm)) {
+            seenNames.add(norm);
+            uniqueRecents.push(entry.color);
+            if (uniqueRecents.length >= 10) break; // Limit to top 10 most recent colors
+          }
         }
       }
 
       // Fallback: If no recent entries, show the first 10 default colors
       if (uniqueRecents.length === 0) {
-        setRecentColors(fetchedColors.slice(0, 10));
+        setRecentColors(cleanColors.slice(0, 10));
       } else {
         setRecentColors(uniqueRecents);
       }
@@ -184,7 +188,7 @@ export const DailyEntryScreen = ({ navigation }: { navigation: any }) => {
   const openColorPicker = (rowKey: string) => {
     setActiveRowKey(rowKey);
     setSearchQuery('');
-    setFilteredColors(colors);
+    setFilteredColors(deduplicateColors(colors));
     setIsModalVisible(true);
   };
 
@@ -192,11 +196,11 @@ export const DailyEntryScreen = ({ navigation }: { navigation: any }) => {
   const handleSearchChange = (query: string) => {
     setSearchQuery(query);
     if (!query.trim()) {
-      setFilteredColors(colors);
+      setFilteredColors(deduplicateColors(colors));
       return;
     }
     const filtered = colors.filter(c => matchColor(c.name, query));
-    setFilteredColors(filtered);
+    setFilteredColors(deduplicateColors(filtered));
   };
 
   // Select Color

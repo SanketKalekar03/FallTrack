@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useColorStore } from '../store/useColorStore';
 import type { Color } from '../types';
 import { matchColor, isExactColorMatch } from '../utils/transliterate';
+import { deduplicateColors } from '../services/dbService';
 
 interface MarathiColorSelectProps {
   selectedColorId: string;
@@ -56,8 +57,8 @@ export const MarathiColorSelect: React.FC<MarathiColorSelectProps> = ({
   }, [selectedColorId, colors]);
 
   // Filter colors
-  const filteredColors = colors.filter(color => 
-    matchColor(color.name, searchQuery)
+  const filteredColors = deduplicateColors(
+    colors.filter(color => matchColor(color.name, searchQuery))
   );
 
   const exactMatch = colors.some(

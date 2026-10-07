@@ -148,6 +148,29 @@ const SEED_COLORS = [
   'पिवळा', 'गुलाबी', 'काळा', 'राजवाडी', 'मोरपंखी', 'जांभळा'
 ];
 
+export function deduplicateColors(colorList: Color[]): Color[] {
+  if (!colorList || colorList.length === 0) return [];
+  const map = new Map<string, Color>();
+
+  const sorted = [...colorList].sort((a, b) => {
+    const aGlobal = !a.user_id;
+    const bGlobal = !b.user_id;
+    if (aGlobal && !bGlobal) return -1;
+    if (!aGlobal && bGlobal) return 1;
+    return (a.created_at || '').localeCompare(b.created_at || '');
+  });
+
+  for (const c of sorted) {
+    if (!c || !c.name) continue;
+    const norm = c.name.trim().toLowerCase();
+    if (!map.has(norm)) {
+      map.set(norm, c);
+    }
+  }
+
+  return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
 const getLocalColors = (): Color[] => {
   const userId = getActiveUserId();
   const data = localStorage.getItem(`falltrack_colors_${userId}`);
@@ -160,7 +183,7 @@ const getLocalColors = (): Color[] => {
     localStorage.setItem(`falltrack_colors_${userId}`, JSON.stringify(initial));
     return initial;
   }
-  return JSON.parse(data);
+  return deduplicateColors(JSON.parse(data));
 };
 
 const getLocalRates = (): Rate[] => {
@@ -243,9 +266,9 @@ export const dbService = {
           }
         }
       }
-      return data || [];
+      return deduplicateColors(data || []);
     } else {
-      return getLocalColors().sort((a, b) => a.name.localeCompare(b.name));
+      return deduplicateColors(getLocalColors());
     }
   },
 

@@ -227,6 +227,30 @@ const SEED_COLORS = [
   'पिवळा', 'गुलाबी', 'काळा', 'राजवाडी', 'मोरपंखी', 'जांभळा'
 ];
 
+export function deduplicateColors(colorList: Color[]): Color[] {
+  if (!colorList || colorList.length === 0) return [];
+  const map = new Map<string, Color>();
+
+  // Prioritize global seed colors (user_id is null) or default IDs as canonical row
+  const sorted = [...colorList].sort((a, b) => {
+    const aGlobal = !a.user_id || a.id.startsWith('default-') || a.id.startsWith('mobile-default');
+    const bGlobal = !b.user_id || b.id.startsWith('default-') || b.id.startsWith('mobile-default');
+    if (aGlobal && !bGlobal) return -1;
+    if (!aGlobal && bGlobal) return 1;
+    return (a.created_at || '').localeCompare(b.created_at || '');
+  });
+
+  for (const c of sorted) {
+    if (!c || !c.name) continue;
+    const norm = c.name.trim().toLowerCase();
+    if (!map.has(norm)) {
+      map.set(norm, c);
+    }
+  }
+
+  return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
 // Offline fallbacks using AsyncStorage
 const getLocalColors = async (): Promise<Color[]> => {
   const userId = await getActiveUserId();
@@ -240,7 +264,7 @@ const getLocalColors = async (): Promise<Color[]> => {
     await AsyncStorage.setItem(`falltrack_colors_${userId}`, JSON.stringify(initial));
     return initial;
   }
-  return JSON.parse(data);
+  return deduplicateColors(JSON.parse(data));
 };
 
 const getLocalRates = async (): Promise<Rate[]> => {
@@ -338,140 +362,71 @@ export const dbService = {
           }
         }
 
-        // Self-healing duplicates cleanup in Supabase
+        // Automatic background deduplication in Supabase
         if (data && data.length > 0) {
           const uniqueNames = new Set<string>();
-          const duplicates: Color[] = [];
+          const duplicatesToDelete: Color[] = [];
           const keptColorsMap = new Map<string, string>(); // name -> keptId
 
-          // Sort to prioritize standard default IDs or oldest first
-          const sortedData = [...data].sort((a, b) => {
-            const aDefault = a.id.startsWith('default-') || a.id.startsWith('mobile-default');
-            const bDefault = b.id.startsWith('default-') || b.id.startsWith('mobile-default');
-            if (aDefault && !bDefault) return -1;
-            if (!aDefault && bDefault) return 1;
+          // Prioritize global seed colors (user_id IS NULL) or default IDs as canonical row,
+          // so user-owned duplicate (user_id = auth.uid()) can be safely deleted under RLS!
+          const sorted = [...data].sort((a, b) => {
+            const aGlobal = !a.user_id || a.id.startsWith('default-') || a.id.startsWith('mobile-default');
+            const bGlobal = !b.user_id || b.id.startsWith('default-') || b.id.startsWith('mobile-default');
+            if (aGlobal && !bGlobal) return -1;
+            if (!aGlobal && bGlobal) return 1;
             return (a.created_at || '').localeCompare(b.created_at || '');
           });
 
-          const filteredList: Color[] = [];
-
-          for (const col of sortedData) {
+          for (const col of sorted) {
             const normName = col.name.trim().toLowerCase();
             if (uniqueNames.has(normName)) {
-              duplicates.push(col);
+              if (col.user_id) {
+                duplicatesToDelete.push(col);
+              }
             } else {
               uniqueNames.add(normName);
               keptColorsMap.set(normName, col.id);
-              filteredList.push(col);
             }
           }
 
-          if (duplicates.length > 0) {
-            console.log(`Detected ${duplicates.length} duplicate colors in Supabase. Starting cleanup...`);
-            try {
-              for (const dup of duplicates) {
-                const normName = dup.name.trim().toLowerCase();
-                const keptId = keptColorsMap.get(normName);
-                if (keptId) {
-                  // Re-point entries referencing the duplicate ID to the kept ID
-                  const { error: updateErr } = await supabase
-                    .from('production_entries')
-                    .update({ color_id: keptId })
-                    .eq('color_id', dup.id);
-                  if (updateErr) console.warn('Error re-pointing entries during color merge:', updateErr);
-
-                  // Delete the duplicate color row
-                  const { error: deleteErr } = await supabase
-                    .from('colors')
-                    .delete()
-                    .eq('id', dup.id);
-                  if (deleteErr) console.warn('Error deleting duplicate color:', deleteErr);
+          if (duplicatesToDelete.length > 0) {
+            (async () => {
+              try {
+                for (const dup of duplicatesToDelete) {
+                  const norm = dup.name.trim().toLowerCase();
+                  const keptId = keptColorsMap.get(norm);
+                  if (keptId) {
+                    await supabase
+                      .from('production_entries')
+                      .update({ color_id: keptId })
+                      .eq('color_id', dup.id);
+                    await supabase
+                      .from('colors')
+                      .delete()
+                      .eq('id', dup.id);
+                  }
                 }
+              } catch (e) {
+                console.warn('Background color deduplication warning:', e);
               }
-              console.log('Successfully completed Supabase duplicate colors cleanup!');
-              // Re-fetch clean list
-              const { data: cleanData } = await withTimeout(
-                supabase
-                  .from('colors')
-                  .select('*')
-                  .order('name', { ascending: true })
-              );
-              const finalCleanData = cleanData || [];
-              await saveLocalColors(finalCleanData);
-              return finalCleanData;
-            } catch (err) {
-              console.warn('Supabase color cleanup error:', err);
-            }
+            })();
           }
         }
 
-        const finalData = data || [];
-        await saveLocalColors(finalData);
-        return finalData;
+        const cleanColors = deduplicateColors(data || []);
+        await saveLocalColors(cleanColors);
+        return cleanColors;
       } catch (err) {
         console.warn('Supabase getColors failed, falling back to local storage:', err);
       }
     }
     
     // Fallback block if offline or not configured
-    {
-      const localColors = await getLocalColors();
-      const entries = await getLocalEntries();
-
-      // Self-healing duplicates cleanup locally
-      const uniqueNames = new Set<string>();
-      const duplicates: Color[] = [];
-      const keptColorsMap = new Map<string, string>(); // name -> keptId
-
-      // Sort to prioritize default/stable IDs or oldest first
-      const sortedColors = [...localColors].sort((a, b) => {
-        const aDefault = a.id.startsWith('default-') || a.id.startsWith('mobile-default');
-        const bDefault = b.id.startsWith('default-') || b.id.startsWith('mobile-default');
-        if (aDefault && !bDefault) return -1;
-        if (!aDefault && bDefault) return 1;
-        return (a.created_at || '').localeCompare(b.created_at || '');
-      });
-
-      const cleanColorsList: Color[] = [];
-
-      for (const col of sortedColors) {
-        const normName = col.name.trim().toLowerCase();
-        if (uniqueNames.has(normName)) {
-          duplicates.push(col);
-        } else {
-          uniqueNames.add(normName);
-          keptColorsMap.set(normName, col.id);
-          cleanColorsList.push(col);
-        }
-      }
-
-      if (duplicates.length > 0) {
-        console.log(`Detected ${duplicates.length} duplicate colors locally. Cleaning up...`);
-        let entriesChanged = false;
-        const updatedEntries = entries.map(e => {
-          if (e.color_id) {
-            const colorObj = localColors.find(c => c.id === e.color_id);
-            if (colorObj) {
-              const normName = colorObj.name.trim().toLowerCase();
-              const keptId = keptColorsMap.get(normName);
-              if (keptId && keptId !== e.color_id) {
-                entriesChanged = true;
-                return { ...e, color_id: keptId };
-              }
-            }
-          }
-          return e;
-        });
-
-        if (entriesChanged) {
-          await saveLocalEntries(updatedEntries);
-        }
-        await saveLocalColors(cleanColorsList);
-        return cleanColorsList.sort((a, b) => a.name.localeCompare(b.name));
-      }
-
-      return localColors.sort((a, b) => a.name.localeCompare(b.name));
-    }
+    const localColors = await getLocalColors();
+    const cleanColors = deduplicateColors(localColors);
+    await saveLocalColors(cleanColors);
+    return cleanColors;
   },
 
   async createColor(name: string): Promise<Color> {
