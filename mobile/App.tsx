@@ -35,6 +35,9 @@ import { HistoryScreen } from './src/screens/HistoryScreen';
 import { IncomeTrackerScreen } from './src/screens/IncomeTrackerScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
+import { InitialSetupScreen } from './src/screens/InitialSetupScreen';
+import { settingsService } from './src/services/settingsService';
+import type { InitialSetupData } from './src/types';
 
 import { AlertProvider } from './src/components/AlertProvider';
 import { COLORS } from './src/utils/theme';
@@ -156,6 +159,8 @@ export default function App() {
   const [user, setUser] = useState<{ id: string; email: string } | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [isSplashAnimationComplete, setIsSplashAnimationComplete] = useState(false);
+  const [isSetupCompleted, setIsSetupCompleted] = useState<boolean | null>(null);
+  const [setupChecking, setSetupChecking] = useState<boolean>(false);
 
   const logoScale = useRef(new Animated.Value(0.5)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
@@ -165,6 +170,46 @@ export default function App() {
   const loaderProgress = useRef(new Animated.Value(-60)).current;
   const textOpacity = useRef(new Animated.Value(0)).current;
   const marathiOpacity = useRef(new Animated.Value(0)).current;
+
+  // Verify setup completion when authenticated user changes
+  useEffect(() => {
+    if (!user) {
+      setIsSetupCompleted(null);
+      setSetupChecking(false);
+      return;
+    }
+
+    let isMounted = true;
+    const checkSetup = async () => {
+      setSetupChecking(true);
+      try {
+        const { isSetupCompleted } = await settingsService.getUserSettings(user.id);
+        if (isMounted) {
+          setIsSetupCompleted(isSetupCompleted);
+        }
+      } catch (err) {
+        console.warn('Error checking mobile setup status:', err);
+        if (isMounted) {
+          setIsSetupCompleted(false);
+        }
+      } finally {
+        if (isMounted) {
+          setSetupChecking(false);
+        }
+      }
+    };
+
+    checkSetup();
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
+
+  const handleInitialSetupComplete = async (data: InitialSetupData) => {
+    if (!user) return;
+    await settingsService.completeInitialSetup(user.id, data);
+    setIsSetupCompleted(true);
+  };
 
   useEffect(() => {
     // 1. Hide native splash screen immediately to reveal JS animated splash screen
@@ -342,6 +387,7 @@ export default function App() {
       }
       await AsyncStorage.removeItem('falltrack_active_user_id');
       setUser(null);
+      setIsSetupCompleted(null);
     } catch (e) {
       console.warn('Sign out failed:', e);
     } finally {
@@ -466,10 +512,20 @@ export default function App() {
     <SafeAreaProvider>
       <StatusBar style="dark" />
       <AlertProvider>
-        {user ? (
-          <MainNavigator user={user} handleLogout={handleLogout} />
-        ) : (
+        {!user ? (
           <LoginScreen onLoginSuccess={(u) => setUser(u)} />
+        ) : setupChecking || isSetupCompleted === null ? (
+          <View style={{ flex: 1, backgroundColor: COLORS.background, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+          </View>
+        ) : isSetupCompleted === false ? (
+          <InitialSetupScreen
+            userEmail={user.email}
+            onComplete={handleInitialSetupComplete}
+            onSignOut={handleLogout}
+          />
+        ) : (
+          <MainNavigator user={user} handleLogout={handleLogout} />
         )}
       </AlertProvider>
     </SafeAreaProvider>

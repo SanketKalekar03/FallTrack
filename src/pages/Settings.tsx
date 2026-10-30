@@ -133,22 +133,22 @@ export const Settings: React.FC<SettingsProps> = ({
     toast.success("Full PDF exported successfully!");
   };
 
-  // Backup download triggers JSON generation of the local storage
-  const handleBackupDownload = () => {
+  // Backup download triggers complete JSON generation
+  const handleBackupDownload = async () => {
     try {
-      const data = dbService.exportBackupData();
+      const data = await dbService.exportCompleteBackup();
       const jsonString = JSON.stringify(data, null, 2);
       const blob = new Blob([jsonString], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `FallTrack_Backup_${new Date().toISOString().split('T')[0]}.json`);
+      link.setAttribute('download', `FallTrack_Complete_Backup_${new Date().toISOString().split('T')[0]}.json`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       
-      toast.success("Backup JSON exported successfully!");
+      toast.success("Complete backup JSON exported successfully!");
     } catch (err: any) {
       toast.error("Backup failed: " + err.message);
     }

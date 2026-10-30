@@ -657,7 +657,7 @@ export const dbService = {
   },
 
   // Settings / Backup Support
-  async importBackupData(backup: { colors: Color[]; rates: Rate[]; entries: ProductionEntry[] }): Promise<void> {
+  async importBackupData(backup: { colors: Color[]; rates: Rate[]; entries: ProductionEntry[]; income_periods?: IncomePeriod[] }): Promise<void> {
     if (isSupabaseConfigured && supabase) {
       throw new Error('Backup restore on cloud Supabase is disabled for safety. Use SQL interface.');
     } else {
@@ -665,15 +665,54 @@ export const dbService = {
       localStorage.setItem(`falltrack_colors_${userId}`, JSON.stringify(backup.colors));
       localStorage.setItem(`falltrack_rates_${userId}`, JSON.stringify(backup.rates));
       localStorage.setItem(`falltrack_entries_${userId}`, JSON.stringify(backup.entries));
+      if (backup.income_periods) {
+        localStorage.setItem(`falltrack_income_periods_${userId}`, JSON.stringify(backup.income_periods));
+      }
     }
   },
 
-  exportBackupData(): { colors: Color[]; rates: Rate[]; entries: ProductionEntry[] } {
+  exportBackupData(): { colors: Color[]; rates: Rate[]; entries: ProductionEntry[]; income_periods?: IncomePeriod[] } {
     return {
       colors: getLocalColors(),
       rates: getLocalRates(),
-      entries: getLocalEntries()
+      entries: getLocalEntries(),
+      income_periods: getLocalIncomePeriods()
     };
+  },
+
+  async exportCompleteBackup(): Promise<{
+    backup_date: string;
+    colors: Color[];
+    rates: Rate[];
+    entries: ProductionEntry[];
+    income_periods: IncomePeriod[];
+    profile?: { app_name: string; manager_name: string; manager_phone: string };
+  }> {
+    if (isSupabaseConfigured && supabase) {
+      const [colors, rates, entries, periods, profile] = await Promise.all([
+        dbService.getColors().catch(() => getLocalColors()),
+        dbService.getRates().catch(() => getLocalRates()),
+        dbService.getProductionEntries().catch(() => getLocalEntries()),
+        dbService.getIncomePeriods().catch(() => getLocalIncomePeriods()),
+        dbService.getProfile().catch(() => undefined)
+      ]);
+      return {
+        backup_date: new Date().toISOString(),
+        colors,
+        rates,
+        entries,
+        income_periods: periods,
+        profile
+      };
+    } else {
+      return {
+        backup_date: new Date().toISOString(),
+        colors: getLocalColors(),
+        rates: getLocalRates(),
+        entries: getLocalEntries(),
+        income_periods: getLocalIncomePeriods()
+      };
+    }
   },
 
   // Profile Settings API

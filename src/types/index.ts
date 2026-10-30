@@ -70,3 +70,18 @@ export interface IncomePeriod {
   created_at?: string;
 }
 
+export interface UserProfile {
+  user_id?: string;
+  app_name: string;
+  manager_name: string;
+  manager_phone: string;
+  is_setup_completed: boolean;
+  updated_at?: string;
+}
+
+export interface InitialSetupData {
+  managerName: string;
+  mobileNumber: string;
+  ratePerDozen: number;
+}
+
