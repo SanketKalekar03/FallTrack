@@ -113,19 +113,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       value: todayFalls.toLocaleString(),
       label: "Falls",
       icon: Sparkles,
-      bgColor: "bg-white",
-      accentColor: "text-sky-600",
-      iconBg: "bg-sky-50",
-      badge: todayFalls > 0 ? { text: "Active", type: "sky" } : { text: "No logs today", type: "neutral" }
+      iconBg: "bg-sky-50 border border-sky-100/80 text-sky-600",
+      accentGlow: "from-sky-500/10 to-transparent",
+      badge: todayFalls > 0 
+        ? { text: "Active Today", type: "success" } 
+        : { text: "No logs today", type: "neutral" }
     },
     {
       title: "Cycle Production",
       value: cycleFalls.toLocaleString(),
       label: "Falls",
       icon: Calendar,
-      bgColor: "bg-white",
-      accentColor: "text-amber-600",
-      iconBg: "bg-amber-50",
+      iconBg: "bg-amber-50 border border-amber-100/80 text-amber-600",
+      accentGlow: "from-amber-500/10 to-transparent",
       badge: { text: "Active Cycle", type: "amber" }
     },
     {
@@ -133,20 +133,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       value: `Rs. ${currentRate.toFixed(2)}`,
       label: "/ Dozen",
       icon: IndianRupee,
-      bgColor: "bg-white",
-      accentColor: "text-emerald-600",
-      iconBg: "bg-emerald-50",
-      badge: { text: "Standard", type: "success" }
+      iconBg: "bg-emerald-50 border border-emerald-100/80 text-emerald-600",
+      accentGlow: "from-emerald-500/10 to-transparent",
+      badge: { text: "Standard", type: "emerald" }
     },
     {
       title: "Est. Cycle Income",
       value: `Rs. ${Math.round(estimatedIncome).toLocaleString()}`,
       label: "",
       icon: TrendingUp,
-      bgColor: "bg-white",
-      accentColor: "text-brand-primary",
-      iconBg: "bg-brand-light-purple/40",
-      badge: { text: "Current Cycle", type: "neutral" }
+      iconBg: "bg-sky-50 border border-sky-100/80 text-brand-primary",
+      accentGlow: "from-sky-500/10 to-transparent",
+      badge: { text: "Current Cycle", type: "sky" }
     }
   ];
 
@@ -189,80 +187,85 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="flex-1 flex flex-col justify-between gap-2.5 sm:gap-3.5 h-full min-h-0">
       {/* Stats Cards Section */}
       <motion.div 
         variants={containerVariants}
         initial="hidden"
         animate="show"
-        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 shrink-0"
       >
         {stats.map((stat, idx) => {
           const Icon = stat.icon;
-          const isBrand = stat.bgColor.includes('gradient');
           return (
             <motion.div 
               key={idx}
               variants={itemVariants}
               whileHover={{ 
-                y: -4, 
-                boxShadow: "0 10px 25px -5px rgba(92, 62, 163, 0.12), 0 8px 16px -4px rgba(92, 62, 163, 0.08)"
+                y: -3, 
+                boxShadow: "0 10px 25px -4px rgba(2, 132, 199, 0.1), 0 4px 12px -2px rgba(2, 132, 199, 0.05)"
               }}
               whileTap={{ scale: 0.985 }}
-              className={`p-4 rounded-xl border border-slate-100/80 shadow-soft transition-all duration-300 relative overflow-hidden group flex justify-between items-center ${stat.bgColor}`}
+              className="bg-white px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl border border-slate-200/80 shadow-[0_2px_10px_-2px_rgba(2,132,199,0.05)] transition-all duration-300 relative overflow-hidden group flex flex-col justify-between"
             >
-              {/* Decorative background icon watermark */}
-              <Icon 
-                size={56} 
-                className={`absolute -right-2 -bottom-2 opacity-[0.035] transition-transform duration-500 group-hover:scale-115 group-hover:rotate-12 pointer-events-none ${isBrand ? 'text-white' : stat.accentColor}`} 
-              />
-              
-              <div className="flex flex-col gap-1 z-5">
-                <p className={`text-[9px] font-bold uppercase tracking-wider ${isBrand ? 'text-white/70' : 'text-slate-400'}`}>
+              {/* Subtle ambient corner gradient on hover */}
+              <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl ${stat.accentGlow} rounded-bl-full pointer-events-none transition-opacity duration-300 opacity-60 group-hover:opacity-100`} />
+
+              {/* Top Row: Title + Icon Badge */}
+              <div className="flex items-center justify-between z-1 relative">
+                <span className="text-[10px] sm:text-[10.5px] font-bold text-slate-500 uppercase tracking-wider">
                   {stat.title}
-                </p>
-                <h3 className="text-xl font-extrabold tracking-tight">
-                  {stat.value}
+                </span>
+                <div className={`w-7.5 h-7.5 rounded-lg ${stat.iconBg} flex items-center justify-center shrink-0 shadow-2xs transition-transform duration-300 group-hover:scale-105`}>
+                  <Icon size={14} />
+                </div>
+              </div>
+
+              {/* Middle Row: Hero Number */}
+              <div className="my-1 z-1 relative">
+                <div className="flex items-baseline">
+                  <span className="text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight leading-none">
+                    {stat.value}
+                  </span>
                   {stat.label && (
-                    <span className={`text-[9px] font-bold ml-1 ${isBrand ? 'text-white/70' : 'text-slate-400'}`}>
+                    <span className="text-[11px] font-semibold text-slate-400 ml-1.5">
                       {stat.label}
-                    </span>
-                  )}
-                </h3>
-                
-                {/* Badge pill */}
-                <div className="mt-1">
-                  {stat.badge.type === 'success' && (
-                    <span className="text-[9px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full">
-                      {stat.badge.text}
-                    </span>
-                  )}
-                  {stat.badge.type === 'brand' && (
-                    <span className="text-[9px] font-bold uppercase tracking-wider bg-white/20 text-white px-2 py-0.5 rounded-full">
-                      {stat.badge.text}
-                    </span>
-                  )}
-                  {stat.badge.type === 'amber' && (
-                    <span className="text-[9px] font-bold uppercase tracking-wider bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full">
-                      {stat.badge.text}
-                    </span>
-                  )}
-                  {stat.badge.type === 'neutral' && (
-                    <span className="text-[9px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
-                      {stat.badge.text}
-                    </span>
-                  )}
-                  {stat.badge.type === 'sky' && (
-                    <span className="text-[9px] font-bold uppercase tracking-wider bg-sky-50 text-sky-600 px-2 py-0.5 rounded-full">
-                      {stat.badge.text}
                     </span>
                   )}
                 </div>
               </div>
 
-              {/* Icon Container */}
-              <div className={`w-9 h-9 rounded-full ${stat.iconBg} flex items-center justify-center shrink-0 z-5 shadow-inner`}>
-                <Icon size={16} className={stat.accentColor} />
+              {/* Bottom Row: Context Badge */}
+              <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between z-1 relative">
+                {stat.badge.type === 'success' && (
+                  <span className="inline-flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>{stat.badge.text}</span>
+                  </span>
+                )}
+                {stat.badge.type === 'neutral' && (
+                  <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-slate-500 bg-slate-50 border border-slate-200/60 px-2 py-0.5 rounded-full">
+                    <span>{stat.badge.text}</span>
+                  </span>
+                )}
+                {stat.badge.type === 'amber' && (
+                  <span className="inline-flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200/60 px-2 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    <span>{stat.badge.text}</span>
+                  </span>
+                )}
+                {stat.badge.type === 'emerald' && (
+                  <span className="inline-flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    <span>{stat.badge.text}</span>
+                  </span>
+                )}
+                {stat.badge.type === 'sky' && (
+                  <span className="inline-flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-sky-700 bg-sky-50 border border-sky-200/60 px-2 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                    <span>{stat.badge.text}</span>
+                  </span>
+                )}
               </div>
             </motion.div>
           );
@@ -274,20 +277,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
         variants={gridVariants}
         initial="hidden"
         animate="show"
-        className="grid grid-cols-1 lg:grid-cols-3 gap-3"
+        className="grid grid-cols-1 lg:grid-cols-3 lg:grid-rows-1 gap-2.5 sm:gap-3 flex-1 min-h-0 h-full items-stretch"
       >
         {/* Trend Bar Chart Card */}
-        <div className="lg:col-span-2 bg-white p-4 rounded-xl border border-slate-100 shadow-soft">
-          <div className="flex justify-between items-center mb-3.5">
+        <div className="lg:col-span-2 bg-white p-3.5 sm:p-4 rounded-xl border border-slate-100 shadow-soft flex flex-col justify-between h-full min-h-0">
+          <div className="flex justify-between items-center mb-2 shrink-0">
             <div>
-              <h3 className="text-sm font-bold text-slate-800">Production Trend</h3>
-              <p className="text-[10px] text-brand-text-muted mt-0.5">Annual performance analytics</p>
+              <h3 className="text-xs sm:text-sm font-bold text-slate-800">Production Trend</h3>
+              <p className="text-[9.5px] text-brand-text-muted mt-0.5">Annual performance analytics</p>
             </div>
             
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(Number(e.target.value))}
-              className="px-2.5 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none text-slate-700 font-semibold focus:border-brand-primary cursor-pointer hover:bg-slate-100 transition-colors"
+              className="px-2 py-0.5 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none text-slate-700 font-semibold focus:border-brand-primary cursor-pointer hover:bg-slate-100 transition-colors"
             >
               {yearsList.map(y => (
                 <option key={y} value={y}>Year {y}</option>
@@ -295,19 +298,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
             </select>
           </div>
           
-          <DashboardChart data={chartData} />
+          <div className="flex-1 w-full min-h-[170px] relative">
+            <DashboardChart data={chartData} className="w-full h-full" />
+          </div>
         </div>
 
-        {/* Last Entry & Quick Actions Card */}
-        <div className="flex flex-col gap-3">
+        {/* Last Entry & Quick Actions Column */}
+        <div className="flex flex-col gap-2.5 sm:gap-3 justify-between h-full min-h-0">
           {/* Last Entry */}
-          <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-soft flex-1 flex flex-col justify-between group">
+          <div className="bg-white p-3 sm:p-3.5 rounded-xl border border-slate-100 shadow-soft flex-1 flex flex-col justify-between group min-h-0">
             <div>
-              <h4 className="text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-3">Last Entry</h4>
+              <h4 className="text-[9.5px] font-bold text-slate-450 uppercase tracking-wider mb-2">Last Entry</h4>
               
-              <div className="flex items-center gap-3 p-3 bg-slate-50/60 border border-slate-100 rounded-xl transition-all duration-300 group-hover:border-brand-primary/10 group-hover:bg-brand-light-purple/5">
-                <div className="w-9 h-9 rounded-xl bg-brand-light-purple flex items-center justify-center shrink-0 text-brand-primary shadow-sm">
-                  <Calendar size={16} />
+              <div className="flex items-center gap-2.5 p-2.5 bg-slate-50/60 border border-slate-100 rounded-xl transition-all duration-300 group-hover:border-brand-primary/10 group-hover:bg-brand-light-purple/5">
+                <div className="w-8 h-8 rounded-lg bg-brand-light-purple flex items-center justify-center shrink-0 text-brand-primary shadow-xs">
+                  <Calendar size={15} />
                 </div>
                 
                 <div className="flex-1 min-w-0">
@@ -320,7 +325,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                 </div>
 
                 <div className="shrink-0 text-right">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-extrabold bg-brand-light-purple/60 border border-brand-primary/10 text-brand-primary">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[9.5px] font-extrabold bg-brand-light-purple/60 border border-brand-primary/10 text-brand-primary">
                     {lastEntryFalls.toLocaleString()} Falls
                   </span>
                 </div>
@@ -329,53 +334,53 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
 
             <motion.button 
               onClick={() => onNavigate('history')}
-              whileHover={{ scale: 1.015 }}
+              whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.985 }}
-              className="w-full mt-4 py-1.5 border border-slate-200 hover:border-slate-350 hover:bg-slate-50 text-[10px] font-extrabold text-slate-700 bg-white rounded-lg flex items-center justify-center gap-1 shadow-sm transition-all cursor-pointer"
+              className="w-full mt-2.5 py-1.5 border border-slate-200 hover:border-slate-350 hover:bg-slate-50 text-[10px] font-extrabold text-slate-700 bg-white rounded-lg flex items-center justify-center gap-1 shadow-xs transition-all cursor-pointer"
             >
               View History <ChevronRight size={12} />
             </motion.button>
           </div>
 
           {/* Quick Actions */}
-          <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-soft">
-            <h4 className="text-[10px] font-bold text-slate-455 uppercase tracking-wider mb-3">Quick Shortcuts</h4>
+          <div className="bg-white p-3 sm:p-3.5 rounded-xl border border-slate-100 shadow-soft flex-1 flex flex-col justify-between min-h-0">
+            <h4 className="text-[9.5px] font-bold text-slate-455 uppercase tracking-wider mb-1.5 shrink-0">Quick Shortcuts</h4>
             
-            <div className="space-y-2">
+            <div className="space-y-1.5 flex-1 flex flex-col justify-center">
               <motion.button
                 onClick={() => onNavigate('daily-entry')}
-                whileHover={{ scale: 1.015, x: 2 }}
+                whileHover={{ scale: 1.01, x: 2 }}
                 whileTap={{ scale: 0.985 }}
-                className="w-full flex items-center gap-3 p-3 bg-slate-50/60 border border-slate-100 hover:border-brand-primary/20 hover:bg-brand-light-purple/10 text-left rounded-xl transition-all duration-200 group cursor-pointer"
+                className="w-full flex items-center gap-2.5 p-2.5 bg-slate-50/60 border border-slate-100 hover:border-brand-primary/20 hover:bg-brand-light-purple/10 text-left rounded-xl transition-all duration-200 group cursor-pointer"
               >
-                <div className="w-8 h-8 rounded-lg bg-brand-light-purple flex items-center justify-center shrink-0 text-brand-primary shadow-inner">
-                  <PenSquare size={15} />
+                <div className="w-7.5 h-7.5 rounded-lg bg-brand-light-purple flex items-center justify-center shrink-0 text-brand-primary shadow-inner">
+                  <PenSquare size={14} />
                 </div>
                 
                 <div className="flex-1 min-w-0">
                   <h5 className="text-xs font-bold text-slate-800 group-hover:text-brand-primary transition-colors">Record New Falls</h5>
-                  <p className="text-[9px] text-brand-text-muted mt-0.5">Enter completed saree bundles</p>
+                  <p className="text-[9px] text-brand-text-muted">Enter completed saree bundles</p>
                 </div>
                 
-                <ChevronRight size={14} className="text-slate-400 group-hover:text-brand-primary group-hover:translate-x-0.5 transition-all" />
+                <ChevronRight size={13} className="text-slate-400 group-hover:text-brand-primary group-hover:translate-x-0.5 transition-all" />
               </motion.button>
 
               <motion.button
                 onClick={() => onNavigate('rates')}
-                whileHover={{ scale: 1.015, x: 2 }}
+                whileHover={{ scale: 1.01, x: 2 }}
                 whileTap={{ scale: 0.985 }}
-                className="w-full flex items-center gap-3 p-3 bg-slate-50/60 border border-slate-100 hover:border-brand-primary/20 hover:bg-brand-light-purple/10 text-left rounded-xl transition-all duration-200 group cursor-pointer"
+                className="w-full flex items-center gap-2.5 p-2.5 bg-slate-50/60 border border-slate-100 hover:border-brand-primary/20 hover:bg-brand-light-purple/10 text-left rounded-xl transition-all duration-200 group cursor-pointer"
               >
-                <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center shrink-0 text-amber-600 shadow-inner">
-                  <IndianRupee size={15} />
+                <div className="w-7.5 h-7.5 rounded-lg bg-amber-50 flex items-center justify-center shrink-0 text-amber-600 shadow-inner">
+                  <IndianRupee size={14} />
                 </div>
                 
                 <div className="flex-1 min-w-0">
                   <h5 className="text-xs font-bold text-slate-800 group-hover:text-brand-primary transition-colors">Update Rate Card</h5>
-                  <p className="text-[9px] text-brand-text-muted mt-0.5">Adjust active rate per dozen</p>
+                  <p className="text-[9px] text-brand-text-muted">Adjust active rate per dozen</p>
                 </div>
                 
-                <ChevronRight size={14} className="text-slate-400 group-hover:text-brand-primary group-hover:translate-x-0.5 transition-all" />
+                <ChevronRight size={13} className="text-slate-400 group-hover:text-brand-primary group-hover:translate-x-0.5 transition-all" />
               </motion.button>
             </div>
           </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Toaster } from 'react-hot-toast';
+import { PremiumToaster } from './components/PremiumToaster';
+import { ConfirmModal } from './components/ConfirmModal';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { DailyEntry } from './pages/DailyEntry';
@@ -92,21 +93,8 @@ function App() {
     return (
       <>
         <Login />
-        <Toaster 
-          position="top-right" 
-          toastOptions={{ 
-            duration: 4000,
-            style: {
-              background: '#FFFFFF',
-              color: '#0F172A',
-              borderRadius: '12px',
-              border: '1px solid #E5E7EB',
-              fontSize: '13px',
-              fontWeight: 500,
-              boxShadow: '0 4px 12px rgba(2, 132, 199, 0.08)'
-            } 
-          }} 
-        />
+        <PremiumToaster />
+        <ConfirmModal />
       </>
     );
   }
@@ -122,21 +110,8 @@ function App() {
       >
         {renderActivePage()}
       </Layout>
-      <Toaster 
-        position="top-right" 
-        toastOptions={{ 
-          duration: 4000,
-          style: {
-            background: '#FFFFFF',
-            color: '#0F172A',
-            borderRadius: '12px',
-            border: '1px solid #E5E7EB',
-            fontSize: '13px',
-            fontWeight: 500,
-            boxShadow: '0 4px 12px rgba(2, 132, 199, 0.08)'
-          } 
-        }} 
-      />
+      <PremiumToaster />
+      <ConfirmModal />
     </>
   );
 }

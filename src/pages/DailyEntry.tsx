@@ -18,6 +18,7 @@ import { useRateStore } from '../store/useRateStore';
 import { MarathiColorSelect } from '../components/MarathiColorSelect';
 import { productionEntrySchema } from '../schemas/validation';
 import { dbService } from '../services/dbService';
+import { confirmDialog } from '../store/useConfirmStore';
 
 interface EntryRow {
   key: string;
@@ -107,13 +108,18 @@ export const DailyEntry: React.FC = () => {
     });
   };
 
-  const handleResetDraft = () => {
-    if (window.confirm("Are you sure you want to clear the draft?")) {
-      setRows([{ key: 'row-0', colorId: '', quantityStr: '0' }]);
-      setErrors({});
-      dbService.clearDraft();
-      toast.success("Draft cleared successfully!");
-    }
+  const handleResetDraft = async () => {
+    const confirmed = await confirmDialog({
+      title: "Clear Current Draft",
+      message: "Are you sure you want to clear all entered rows and start over? Unsaved inputs will be reset.",
+      confirmText: "Clear Draft",
+      type: "warning"
+    });
+    if (!confirmed) return;
+    setRows([{ key: 'row-0', colorId: '', quantityStr: '0' }]);
+    setErrors({});
+    dbService.clearDraft();
+    toast.success("Draft cleared successfully!");
   };
 
   const handleSave = async () => {

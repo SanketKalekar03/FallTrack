@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import { useRateStore } from '../store/useRateStore';
 import { rateSchema } from '../schemas/validation';
+import { confirmDialog } from '../store/useConfirmStore';
 
 export const RateManagement: React.FC = () => {
   const { rates, fetchRates, addRate, deleteRate, loading } = useRateStore();
@@ -74,13 +75,19 @@ export const RateManagement: React.FC = () => {
       return;
     }
 
-    if (window.confirm(`Are you sure you want to delete rate ₹${rate}?`)) {
-      try {
-        await deleteRate(id);
-        toast.success("Rate deleted successfully.");
-      } catch (err: any) {
-        toast.error(`Error: ${err.message}`);
-      }
+    const confirmed = await confirmDialog({
+      title: "Delete Production Rate",
+      message: `Are you sure you want to delete rate ₹${rate.toFixed(2)}? Historical calculations referencing this rate will be affected.`,
+      confirmText: "Delete Rate",
+      type: "danger"
+    });
+    if (!confirmed) return;
+
+    try {
+      await deleteRate(id);
+      toast.success("Rate deleted successfully.");
+    } catch (err: any) {
+      toast.error(`Error: ${err.message}`);
     }
   };
 

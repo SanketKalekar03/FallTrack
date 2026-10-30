@@ -6,6 +6,7 @@ import { useColorStore } from '../store/useColorStore';
 import { useProductionStore } from '../store/useProductionStore';
 import type { Color } from '../types';
 import { matchColor, isExactColorMatch } from '../utils/transliterate';
+import { confirmDialog } from '../store/useConfirmStore';
 
 export const ColorManagement: React.FC = () => {
   const { colors, fetchColors, addColor, updateColor, deleteColor, loading } = useColorStore();
@@ -95,13 +96,19 @@ export const ColorManagement: React.FC = () => {
       return;
     }
 
-    if (window.confirm(`Are you sure you want to delete "${color.name}"?`)) {
-      try {
-        await deleteColor(color.id);
-        toast.success("Color deleted successfully!");
-      } catch (err: any) {
-        toast.error(`Error deleting color: ${err.message}`);
-      }
+    const confirmed = await confirmDialog({
+      title: "Delete Saree Color",
+      message: `Are you sure you want to delete "${color.name}"? This color will be permanently removed.`,
+      confirmText: "Delete Color",
+      type: "danger"
+    });
+    if (!confirmed) return;
+
+    try {
+      await deleteColor(color.id);
+      toast.success("Color deleted successfully!");
+    } catch (err: any) {
+      toast.error(`Error deleting color: ${err.message}`);
     }
   };
 

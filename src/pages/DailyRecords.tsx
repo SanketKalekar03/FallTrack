@@ -22,6 +22,7 @@ import { exportEntriesToCSV } from '../utils/csvExport';
 import { exportEntriesToPDF } from '../utils/pdfExport';
 import { MarathiColorSelect } from '../components/MarathiColorSelect';
 import { productionEntrySchema } from '../schemas/validation';
+import { confirmDialog } from '../store/useConfirmStore';
 
 export const DailyRecords: React.FC = () => {
   const { 
@@ -158,13 +159,18 @@ export const DailyRecords: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm("Are you sure you want to delete this record?")) {
-      try {
-        await deleteEntry(id);
-        toast.success("Record deleted successfully!");
-      } catch (err: any) {
-        toast.error(`Error deleting record: ${err.message}`);
-      }
+    const confirmed = await confirmDialog({
+      title: "Delete Production Record",
+      message: "Are you sure you want to permanently delete this production log? This action cannot be undone.",
+      confirmText: "Delete Record",
+      type: "danger"
+    });
+    if (!confirmed) return;
+    try {
+      await deleteEntry(id);
+      toast.success("Record deleted successfully!");
+    } catch (err: any) {
+      toast.error(`Error deleting record: ${err.message}`);
     }
   };
 

@@ -15,6 +15,7 @@ import { motion } from 'framer-motion';
 import { dbService } from '../services/dbService';
 import { useRateStore } from '../store/useRateStore';
 import type { IncomePeriod, ProductionEntry } from '../types';
+import { confirmDialog } from '../store/useConfirmStore';
 
 // Helper to add 1 day to YYYY-MM-DD date string safely without timezone offsets
 const addOneDay = (dateStr: string): string => {
@@ -145,9 +146,13 @@ export const IncomePeriods: React.FC = () => {
     }
 
     if (filteredEntries.length === 0) {
-      if (!window.confirm('There are no production logs in this date range. Do you still want to finalize this empty period?')) {
-        return;
-      }
+      const confirmed = await confirmDialog({
+        title: "Finalize Empty Period",
+        message: "There are no production logs in this date range. Do you still want to finalize this empty billing period?",
+        confirmText: "Finalize Anyway",
+        type: "warning"
+      });
+      if (!confirmed) return;
     }
 
     try {
@@ -166,14 +171,20 @@ export const IncomePeriods: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete/rollback this billing period? This will make these dates editable again.')) {
-      try {
-        await dbService.deleteIncomePeriod(id);
-        toast.success('Income period rolled back!');
-        loadData();
-      } catch (err: any) {
-        toast.error('Failed to delete period: ' + err.message);
-      }
+    const confirmed = await confirmDialog({
+      title: "Rollback Income Period",
+      message: "Are you sure you want to delete and rollback this billing period? The included dates and production logs will become editable again.",
+      confirmText: "Rollback Period",
+      type: "danger"
+    });
+    if (!confirmed) return;
+
+    try {
+      await dbService.deleteIncomePeriod(id);
+      toast.success('Income period rolled back!');
+      loadData();
+    } catch (err: any) {
+      toast.error('Failed to delete period: ' + err.message);
     }
   };
 

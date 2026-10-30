@@ -26,6 +26,7 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, appName, profileName, profilePhone }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const { signOut, user } = useAuthStore();
 
   const navItems = [
@@ -148,9 +149,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
         
         <motion.button
           onClick={() => {
-            if (window.confirm("Are you sure you want to sign out?")) {
-              signOut();
-            }
+            setMobileMenuOpen(false);
+            setShowLogoutConfirm(true);
           }}
           whileHover={{ x: 4 }}
           whileTap={{ scale: 0.98 }}
@@ -164,16 +164,16 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
   );
 
   return (
-    <div className="min-h-screen flex bg-brand-bg font-sans">
+    <div className="min-h-screen md:h-screen flex bg-brand-bg font-sans">
       {/* Desktop Sidebar */}
       <aside className="hidden md:block w-52 fixed h-screen top-0 left-0 z-20">
         <SidebarContent />
       </aside>
 
       {/* Main Container */}
-      <div className="flex-1 md:pl-52 flex flex-col min-h-screen">
+      <div className="flex-1 md:pl-52 flex flex-col min-h-screen md:min-h-0 md:h-screen">
         {/* Header Bar */}
-        <header className="sticky top-0 bg-brand-bg/85 backdrop-blur-md border-b border-slate-100 px-5 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between z-10 no-print">
+        <header className="sticky top-0 bg-brand-bg/85 backdrop-blur-md border-b border-slate-100 px-5 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between z-10 no-print shrink-0">
           <div>
             <h2 className="text-lg sm:text-xl font-bold tracking-tight text-slate-800">{getPageTitle()}</h2>
             <p className="text-xs sm:text-[13px] font-medium text-brand-text-muted mt-0.5">{getPageSubtitle()}</p>
@@ -253,19 +253,108 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
         </AnimatePresence>
 
         {/* Main Content Area */}
-        <main className="flex-1 p-3 md:p-4 max-w-6xl w-full mx-auto">
+        <main className="flex-1 flex flex-col p-3 md:p-4 max-w-6xl w-full mx-auto min-h-0 overflow-y-auto">
           <motion.div
             key={activeTab}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="h-full"
+            className="flex-1 flex flex-col min-h-0 h-full"
           >
             {children}
           </motion.div>
         </main>
       </div>
+
+      {/* Premium Sign Out Confirmation Popup */}
+      <AnimatePresence>
+        {showLogoutConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowLogoutConfirm(false)}
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.94, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.94, opacity: 0, y: 15 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl border border-slate-150 shadow-2xl max-w-md w-full overflow-hidden p-6 sm:p-7 text-center relative"
+            >
+              {/* Close button */}
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                className="absolute top-4 right-4 p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+
+              {/* Top ambient brand glow */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-56 h-20 bg-gradient-to-b from-brand-primary/10 via-rose-500/5 to-transparent blur-xl pointer-events-none" />
+
+              {/* Circular Emblem Icon */}
+              <div className="relative z-1 mb-4 flex justify-center">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-b from-rose-50 to-red-50 border border-red-100 flex items-center justify-center shadow-xs">
+                  <div className="w-11 h-11 rounded-xl bg-white border border-red-100/80 flex items-center justify-center shadow-xs">
+                    <LogOut size={20} className="text-red-500 translate-x-0.5" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Heading & Subtext */}
+              <div className="relative z-1">
+                <h3 className="text-lg sm:text-xl font-extrabold text-slate-800 tracking-tight">
+                  Sign Out Confirmation
+                </h3>
+                <p className="text-xs sm:text-[13px] text-brand-text-muted mt-1.5 leading-relaxed max-w-xs sm:max-w-sm mx-auto">
+                  Are you sure you want to sign out? You will need to sign in again to access the dashboard.
+                </p>
+              </div>
+
+              {/* Profile Context Pill */}
+              <div className="relative z-1 mt-5 mb-6 p-3 sm:p-3.5 bg-slate-50/90 border border-slate-200/80 rounded-xl flex items-center gap-3 text-left">
+                <div className="w-10 h-10 rounded-full bg-brand-light-purple flex items-center justify-center text-brand-primary font-extrabold border border-brand-light-purple-hover text-xs sm:text-sm shrink-0 shadow-2xs">
+                  {profileName ? profileName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'M'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-xs sm:text-sm font-bold text-slate-800 truncate">{profileName || 'Manager'}</h4>
+                  <p className="text-[11px] sm:text-xs text-brand-text-muted truncate">{user?.email || profilePhone}</p>
+                </div>
+                <span className="shrink-0 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200/70 rounded-full">
+                  Active
+                </span>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="relative z-1 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowLogoutConfirm(false)}
+                  className="flex-1 py-2.5 sm:py-3 px-5 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs sm:text-sm font-bold rounded-xl shadow-xs transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowLogoutConfirm(false);
+                    signOut();
+                  }}
+                  className="flex-1 py-2.5 sm:py-3 px-5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md shadow-red-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <LogOut size={15} />
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

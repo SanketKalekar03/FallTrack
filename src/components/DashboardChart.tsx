@@ -16,6 +16,7 @@ interface ChartDataPoint {
 
 interface DashboardChartProps {
   data: ChartDataPoint[];
+  className?: string;
 }
 
 const CustomTooltip = ({ active, payload }: any) => {
@@ -32,9 +33,9 @@ const CustomTooltip = ({ active, payload }: any) => {
   return null;
 };
 
-export const DashboardChart: React.FC<DashboardChartProps> = ({ data }) => {
+export const DashboardChart: React.FC<DashboardChartProps> = ({ data, className = "w-full h-52" }) => {
   return (
-    <div className="w-full h-64">
+    <div className={className}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={data}
