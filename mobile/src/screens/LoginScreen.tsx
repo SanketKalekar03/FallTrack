@@ -104,6 +104,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             await AsyncStorage.setItem('falltrack_local_users', JSON.stringify(localUsers));
 
             await AsyncStorage.setItem('falltrack_active_user_id', data.user.id);
+            await AsyncStorage.setItem('falltrack_active_user_email', data.user.email || '');
             await migrateLocalDefaultToUserMobile(data.user.id);
             await syncLocalDataToCloudMobile(data.user.id);
             onLoginSuccess({ id: data.user.id, email: data.user.email || '' });
@@ -137,6 +138,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               await AsyncStorage.setItem('falltrack_local_users', JSON.stringify(localUsers));
 
               await AsyncStorage.setItem('falltrack_active_user_id', data.user.id);
+              await AsyncStorage.setItem('falltrack_active_user_email', data.user.email || '');
               await migrateLocalDefaultToUserMobile(data.user.id);
               await syncLocalDataToCloudMobile(data.user.id);
               onLoginSuccess({ id: data.user.id, email: data.user.email || '' });
@@ -159,6 +161,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
               if (matchedUser) {
                 await AsyncStorage.setItem('falltrack_active_user_id', matchedUser.id);
+                await AsyncStorage.setItem('falltrack_active_user_email', matchedUser.email || '');
                 await migrateLocalDefaultToUserMobile(matchedUser.id);
                 showToast('Welcome back (Offline fallback)!', 'success');
                 onLoginSuccess({ id: matchedUser.id, email: matchedUser.email });
@@ -207,6 +210,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           localUsers.push(newUser);
           await AsyncStorage.setItem('falltrack_local_users', JSON.stringify(localUsers));
           await AsyncStorage.setItem('falltrack_active_user_id', newUserId);
+          await AsyncStorage.setItem('falltrack_active_user_email', cleanEmail);
           await migrateLocalDefaultToUserMobile(newUserId);
 
           showToast('Offline account registered!', 'success');
@@ -223,6 +227,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           }
 
           await AsyncStorage.setItem('falltrack_active_user_id', matchedUser.id);
+          await AsyncStorage.setItem('falltrack_active_user_email', matchedUser.email || '');
           await migrateLocalDefaultToUserMobile(matchedUser.id);
           showToast('Welcome back (Offline)!', 'success');
           onLoginSuccess({ id: matchedUser.id, email: matchedUser.email });

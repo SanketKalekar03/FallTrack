@@ -60,10 +60,14 @@ export const HistoryScreen = ({ navigation }: { navigation: any }) => {
   const [expandedMonthKey, setExpandedMonthKey] = useState<string | null>(null);
 
   useEffect(() => {
+    // 1. Initial direct load immediately on screen mount
+    loadHistoryData(true).then(() => {
+      loadHistoryData(false);
+    });
+
+    // 2. Also reload whenever returning to this tab
     const unsubscribe = navigation.addListener('focus', () => {
-      // 1. Load local cache instantly to show layout immediately
       loadHistoryData(true).then(() => {
-        // 2. Perform online sync update in the background silently
         loadHistoryData(false);
       });
     });

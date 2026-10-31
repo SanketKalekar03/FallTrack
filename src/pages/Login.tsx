@@ -6,7 +6,7 @@ import {
   Sparkles, 
   ArrowRight, 
   ShieldCheck, 
-  CloudLightning,
+  Globe,
   AlertCircle 
 } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
@@ -100,11 +100,11 @@ export const Login: React.FC = () => {
             {/* Highlights */}
             <div className="flex items-center gap-3">
               <div className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center text-white shadow-sm border border-white/10 shrink-0">
-                <CloudLightning size={14} />
+                <Globe size={14} />
               </div>
               <div>
-                <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-white/90">Offline First</h4>
-                <p className="text-[9px] text-white/70">Works completely offline with automatic local storage fallback.</p>
+                <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-white/90">Real-Time Cloud Sync</h4>
+                <p className="text-[9px] text-white/70">Access and manage your production ledger securely from any web browser.</p>
               </div>
             </div>
 

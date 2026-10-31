@@ -38,10 +38,14 @@ export const DashboardScreen = ({ navigation }: { navigation: any }) => {
   const [recentEntries, setRecentEntries] = useState<ProductionEntry[]>([]);
 
   useEffect(() => {
+    // 1. Initial direct load immediately on screen mount
+    loadDashboardData(true).then(() => {
+      loadDashboardData(false);
+    });
+
+    // 2. Also reload whenever returning to this tab
     const unsubscribe = navigation.addListener('focus', () => {
-      // 1. Load local cache instantly to show layout immediately
       loadDashboardData(true).then(() => {
-        // 2. Perform online sync update in the background silently
         loadDashboardData(false);
       });
     });
@@ -105,9 +109,7 @@ export const DashboardScreen = ({ navigation }: { navigation: any }) => {
     } catch (err) {
       console.warn('Dashboard load error:', err);
     } finally {
-      if (forceLocal) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   };
 

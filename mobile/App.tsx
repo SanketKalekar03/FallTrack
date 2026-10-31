@@ -277,7 +277,8 @@ export default function App() {
       if (isSupabaseConfigured && supabase) {
         let session = null;
         try {
-          const { data } = await withTimeout(supabase.auth.getSession(), 3000);
+          // Allow adequate time (8s) for token refresh over cellular/mobile connections
+          const { data } = await withTimeout(supabase.auth.getSession(), 8000);
           session = data?.session || null;
         } catch (e) {
           console.warn('Supabase getSession failed or timed out:', e);
@@ -286,23 +287,19 @@ export default function App() {
         if (session && session.user) {
           const u = session.user;
           await AsyncStorage.setItem('falltrack_active_user_id', u.id);
-          await syncLocalDataToCloudMobile(u.id);
-          await cleanDatabaseDuplicatesOneTime();
+          await AsyncStorage.setItem('falltrack_active_user_email', u.email || '');
           setUser({ id: u.id, email: u.email || '' });
+
+          // Non-blocking background sync operations
+          syncLocalDataToCloudMobile(u.id).catch(console.warn);
+          cleanDatabaseDuplicatesOneTime().catch(console.warn);
         } else {
-          // Fall back to local session if present, to prevent automatic logouts when offline
+          // Fall back to persistent active user session if present (never auto-logout on network jitter/offline)
           const activeUserId = await AsyncStorage.getItem('falltrack_active_user_id');
-          const localUsersData = await AsyncStorage.getItem('falltrack_local_users');
-          const localUsers: any[] = localUsersData ? JSON.parse(localUsersData) : [];
+          const activeUserEmail = (await AsyncStorage.getItem('falltrack_active_user_email')) || '';
           if (activeUserId) {
-            const matched = localUsers.find(u => u.id === activeUserId);
-            if (matched) {
-              console.log('Online session check failed/null, falling back to local session:', matched.email);
-              setUser({ id: matched.id, email: matched.email });
-            } else {
-              await AsyncStorage.removeItem('falltrack_active_user_id');
-              setUser(null);
-            }
+            console.log('Restoring cached session for user:', activeUserId);
+            setUser({ id: activeUserId, email: activeUserEmail });
           } else {
             setUser(null);
           }
@@ -313,46 +310,35 @@ export default function App() {
           if (session && session.user) {
             const u = session.user;
             await AsyncStorage.setItem('falltrack_active_user_id', u.id);
-            await syncLocalDataToCloudMobile(u.id);
-            await cleanDatabaseDuplicatesOneTime();
+            await AsyncStorage.setItem('falltrack_active_user_email', u.email || '');
             setUser({ id: u.id, email: u.email || '' });
+            syncLocalDataToCloudMobile(u.id).catch(console.warn);
+            cleanDatabaseDuplicatesOneTime().catch(console.warn);
           } else if (event === 'SIGNED_OUT') {
             // Only clear the session on explicit logout events
             await AsyncStorage.removeItem('falltrack_active_user_id');
+            await AsyncStorage.removeItem('falltrack_active_user_email');
             setUser(null);
+            setIsSetupCompleted(null);
           }
         });
       } else {
         // Offline auth init
         const activeUserId = await AsyncStorage.getItem('falltrack_active_user_id');
-        const localUsersData = await AsyncStorage.getItem('falltrack_local_users');
-        const localUsers: any[] = localUsersData ? JSON.parse(localUsersData) : [];
+        const activeUserEmail = (await AsyncStorage.getItem('falltrack_active_user_email')) || '';
         if (activeUserId) {
-          const matched = localUsers.find(u => u.id === activeUserId);
-          if (matched) {
-            setUser({ id: matched.id, email: matched.email });
-          } else {
-            await AsyncStorage.removeItem('falltrack_active_user_id');
-            setUser(null);
-          }
+          setUser({ id: activeUserId, email: activeUserEmail });
         } else {
           setUser(null);
         }
       }
     } catch (e) {
-      console.warn('Auth init failed (likely offline), falling back to offline session check:', e);
+      console.warn('Auth init error, checking cached session:', e);
       try {
         const activeUserId = await AsyncStorage.getItem('falltrack_active_user_id');
-        const localUsersData = await AsyncStorage.getItem('falltrack_local_users');
-        const localUsers: any[] = localUsersData ? JSON.parse(localUsersData) : [];
+        const activeUserEmail = (await AsyncStorage.getItem('falltrack_active_user_email')) || '';
         if (activeUserId) {
-          const matched = localUsers.find(u => u.id === activeUserId);
-          if (matched) {
-            setUser({ id: matched.id, email: matched.email });
-          } else {
-            await AsyncStorage.removeItem('falltrack_active_user_id');
-            setUser(null);
-          }
+          setUser({ id: activeUserId, email: activeUserEmail });
         } else {
           setUser(null);
         }
@@ -383,9 +369,10 @@ export default function App() {
     setAuthLoading(true);
     try {
       if (isSupabaseConfigured && supabase) {
-        await supabase.auth.signOut();
+        await supabase.auth.signOut().catch(() => {});
       }
       await AsyncStorage.removeItem('falltrack_active_user_id');
+      await AsyncStorage.removeItem('falltrack_active_user_email');
       setUser(null);
       setIsSetupCompleted(null);
     } catch (e) {

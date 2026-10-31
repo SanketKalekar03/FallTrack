@@ -68,10 +68,14 @@ export const IncomeTrackerScreen = ({ navigation }: { navigation: any }) => {
   const [pickerMode, setPickerMode] = useState<'start' | 'end' | null>(null);
 
   useEffect(() => {
+    // 1. Initial direct load immediately on screen mount
+    loadTrackerData(true).then(() => {
+      loadTrackerData(false);
+    });
+
+    // 2. Also reload whenever returning to this tab
     const unsubscribe = navigation.addListener('focus', () => {
-      // 1. Load local cache instantly to show layout immediately
       loadTrackerData(true).then(() => {
-        // 2. Perform online sync update in the background silently
         loadTrackerData(false);
       });
     });

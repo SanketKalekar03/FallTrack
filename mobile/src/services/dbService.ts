@@ -317,7 +317,7 @@ const saveLocalIncomePeriods = async (periods: IncomePeriod[]): Promise<void> =>
   await AsyncStorage.setItem(`falltrack_income_periods_${userId}`, JSON.stringify(periods));
 };
 
-export const withTimeout = (promise: any, ms: number = 3000): Promise<any> => {
+export const withTimeout = (promise: any, ms: number = 8000): Promise<any> => {
   return Promise.race([
     promise,
     new Promise<any>((_, reject) =>

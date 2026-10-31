@@ -48,7 +48,7 @@ export const settingsService = {
             .select('*')
             .eq('user_id', userId)
             .maybeSingle(),
-          4000
+          8000
         );
 
         if (error) {
@@ -70,6 +70,13 @@ export const settingsService = {
             is_setup_completed: data.is_setup_completed,
             updated_at: data.updated_at
           };
+
+          // Cache in AsyncStorage for robust offline access
+          await AsyncStorage.setItem(`falltrack_setup_completed_${userId}`, String(data.is_setup_completed));
+          if (profile.app_name) await AsyncStorage.setItem(`falltrack_app_name_${userId}`, profile.app_name);
+          if (profile.manager_name) await AsyncStorage.setItem(`falltrack_profile_name_${userId}`, profile.manager_name);
+          if (profile.manager_phone) await AsyncStorage.setItem(`falltrack_profile_phone_${userId}`, profile.manager_phone);
+
           return { profile, isSetupCompleted: data.is_setup_completed };
         }
 
@@ -105,6 +112,12 @@ export const settingsService = {
           updated_at: data.updated_at
         };
 
+        // Cache backward-compatibility determination
+        await AsyncStorage.setItem(`falltrack_setup_completed_${userId}`, String(isCompleted));
+        if (profile.app_name) await AsyncStorage.setItem(`falltrack_app_name_${userId}`, profile.app_name);
+        if (profile.manager_name) await AsyncStorage.setItem(`falltrack_profile_name_${userId}`, profile.manager_name);
+        if (profile.manager_phone) await AsyncStorage.setItem(`falltrack_profile_phone_${userId}`, profile.manager_phone);
+
         return { profile, isSetupCompleted: isCompleted };
       } catch (err) {
         console.warn('Supabase profile check failed, checking local cache:', err);
@@ -117,7 +130,26 @@ export const settingsService = {
     const managerName = (await AsyncStorage.getItem(`falltrack_profile_name_${userId}`)) || '';
     const managerPhone = (await AsyncStorage.getItem(`falltrack_profile_phone_${userId}`)) || '';
 
-    const isCompleted = savedCompleted === 'true';
+    let isCompleted = savedCompleted === 'true';
+
+    // If local flag isn't set yet, check if this user already has existing local records
+    if (!isCompleted) {
+      try {
+        const localEntriesStr = await AsyncStorage.getItem(`falltrack_entries_${userId}`);
+        const localRatesStr = await AsyncStorage.getItem(`falltrack_rates_${userId}`);
+        const hasEntries = localEntriesStr && JSON.parse(localEntriesStr).length > 0;
+        const hasRates = localRatesStr && JSON.parse(localRatesStr).length > 0;
+        const hasCustom = managerName && managerName !== 'Manager' && managerName.trim() !== '';
+
+        if (hasEntries || hasRates || hasCustom) {
+          isCompleted = true;
+          await AsyncStorage.setItem(`falltrack_setup_completed_${userId}`, 'true');
+        }
+      } catch (e) {
+        // Ignore JSON error
+      }
+    }
+
     const profile: UserProfile = {
       user_id: userId,
       app_name: appName,
